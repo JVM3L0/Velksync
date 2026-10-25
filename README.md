@@ -155,7 +155,7 @@ Use um **celular de verdade no mesmo Wi-Fi**. O emulador Android fica atrás de 
 
 ## Releases
 
-Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APK assinado, agente para Linux (`.tar.gz`) e Windows (`.zip`), `SHA256SUMS` e atestado de proveniência (repositórios públicos). A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
+Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APKs assinados, um por processador (no celular, baixe o **`-arm64.apk`**; aparelhos antigos, o `-armv7.apk`), agente para Linux (`.tar.gz`) e Windows (`.zip`), `SHA256SUMS` e atestado de proveniência (repositórios públicos). A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
 
 Configuração única da chave de assinatura do app:
 

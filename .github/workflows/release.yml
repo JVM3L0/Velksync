@@ -127,9 +127,15 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
         run: |
-          flutter build apk --release
+          set -eu
+          # Um APK por processador (~25 MB cada em vez de ~72 MB). Só os
+          # separados: o código de versão de cada um é diferente do APK único,
+          # e misturar os dois faria o Android recusar a atualização.
+          flutter build apk --release --split-per-abi
           mkdir -p ../out
-          cp build/app/outputs/flutter-apk/app-release.apk "../out/velksync-${VERSION}.apk"
+          for pair in arm64-v8a:arm64 armeabi-v7a:armv7 x86_64:x86_64; do
+            cp "build/app/outputs/flutter-apk/app-${pair%%:*}-release.apk" "../out/velksync-${VERSION}-${pair##*:}.apk"
+          done
       - name: Apagar a chave do runner
         if: always()
         run: rm -f android/release.jks android/key.properties
