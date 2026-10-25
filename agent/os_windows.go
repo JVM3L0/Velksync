@@ -6,7 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"unicode/utf8"
+
+	"golang.org/x/text/encoding/charmap"
 )
 
 const createNoWindow = 0x08000000
@@ -63,4 +67,35 @@ func defaultLogPath(configPath string) string {
 // embaralhado com o prompt; abrir a imagem é o caminho confiável.
 func openFile(path string) bool {
 	return hidden(exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path)).Start() == nil
+}
+
+// Programas de console do Windows escrevem na code page OEM (CP850 no
+// Windows em português), não em UTF-8. Sem converter, "Configuração" chega
+// ao app como "Configura��o".
+func outputText(b []byte) string {
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	getOEMCP := syscall.NewLazyDLL("kernel32.dll").NewProc("GetOEMCP")
+	cp, _, _ := getOEMCP.Call()
+	var enc *charmap.Charmap
+	switch cp {
+	case 437:
+		enc = charmap.CodePage437
+	case 850:
+		enc = charmap.CodePage850
+	case 852:
+		enc = charmap.CodePage852
+	case 860:
+		enc = charmap.CodePage860
+	case 1252:
+		enc = charmap.Windows1252
+	default:
+		enc = charmap.CodePage850
+	}
+	out, err := enc.NewDecoder().Bytes(b)
+	if err != nil {
+		return strings.ToValidUTF8(string(b), "?")
+	}
+	return string(out)
 }

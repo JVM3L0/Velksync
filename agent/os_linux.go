@@ -28,3 +28,5 @@ func defaultLogPath(string) string { return "" }
 
 // No Linux o QR já aparece no terminal.
 func openFile(string) bool { return false }
+
+func outputText(b []byte) string { return string(b) }

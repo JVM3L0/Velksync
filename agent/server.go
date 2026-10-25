@@ -183,7 +183,7 @@ func (s *Server) execute(parent context.Context, line string) runResult {
 	cmd.WaitDelay = 2 * time.Second
 	start := time.Now()
 	err := cmd.Run()
-	res := runResult{Output: out.String(), DurationMs: time.Since(start).Milliseconds()}
+	res := runResult{Output: outputText(out.Bytes()), DurationMs: time.Since(start).Milliseconds()}
 	var exitErr *exec.ExitError
 	switch {
 	case err == nil:
