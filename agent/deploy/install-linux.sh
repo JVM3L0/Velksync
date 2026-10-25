@@ -9,6 +9,18 @@ install -m 644 velksync-agent.service ~/.config/systemd/user/
 [ -f ~/.config/velksync/config.json ] || ~/.local/bin/velksync-agent init ${1:+-token "$1"}
 systemctl --user daemon-reload
 systemctl --user enable --now velksync-agent
+# Sinal de presença: serviço de sistema que sobe no boot para o app saber que
+# o PC ligou mesmo antes do login. Só recebe o segredo de presença.
+sudo install -m 755 velksync-agent /usr/local/bin/velksync-agent
+sudo install -d -m 700 /etc/velksync
+tmp=$(mktemp)
+~/.local/bin/velksync-agent presence-export -out "$tmp"
+sudo install -m 600 -o root -g root "$tmp" /etc/velksync/presence.json
+rm -f "$tmp"
+sudo install -m 644 velksync-presence.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable velksync-presence
+sudo systemctl restart velksync-presence
 # Firewall: libera as portas só para a sub-rede local (ex.: 192.168.3.0/24).
 LAN=$(ip -4 route show proto kernel scope link | awk '!/docker|br-|virbr/ {print $1; exit}')
 if command -v ufw >/dev/null && [ -n "$LAN" ]; then

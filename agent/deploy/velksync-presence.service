@@ -1,0 +1,44 @@
+# Sinal de presença: sobe no boot, antes do login, e só responde "ligado".
+# Roda com um usuário temporário sem privilégios e recebe apenas o segredo
+# de presença (nunca o token mestre), entregue pelo systemd.
+[Unit]
+Description=Velksync presence
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/velksync-agent presence -file %d/presence
+LoadCredential=presence:/etc/velksync/presence.json
+DynamicUser=yes
+Restart=on-failure
+RestartSec=30
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+# AF_NETLINK: para achar o MAC da interface, que a descoberta informa.
+RestrictAddressFamilies=AF_INET AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+# Chamada bloqueada vira erro, não morte do processo (o Go ajusta limites ao iniciar).
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

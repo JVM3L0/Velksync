@@ -66,7 +66,7 @@ jobs:
           mkdir -p ../out/linux ../out/windows
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../out/linux/velksync-agent .
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H=windowsgui" -o ../out/windows/velksync-agent.exe .
-          cp deploy/install-linux.sh deploy/velksync-agent.service ../out/linux/
+          cp deploy/install-linux.sh deploy/velksync-agent.service deploy/velksync-presence.service ../out/linux/
           cp deploy/install-windows.ps1 ../out/windows/
           cd ../out
           tar -czf "velksync-agent-${VERSION}-linux-amd64.tar.gz" -C linux .
