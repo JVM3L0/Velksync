@@ -1,1 +1,7 @@
 agent/dist/
+
+# Chave de assinatura do app: nunca no repositório (vive nos Secrets do GitHub
+# e no seu backup pessoal).
+*.jks
+*.keystore
+app/android/key.properties
