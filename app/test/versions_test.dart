@@ -45,6 +45,8 @@ void main() {
       await tester.tap(find.text('Agora não'));
       await tester.tap(find.text('Como atualizar'));
       expect((dismissed, howTo), (1, 1));
+      final card = tester.getRect(find.byType(UpdateBanner));
+      expect(tester.getRect(find.text('Como atualizar')).right, greaterThan(card.right - 80), reason: 'botões à direita');
     });
 
     testWidgets('app desatualizado', (tester) async {

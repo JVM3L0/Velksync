@@ -41,7 +41,7 @@ class UpdateBanner extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
       decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(Radii.xl)),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,6 +64,7 @@ class UpdateBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          // Largura toda: sem ela o Wrap encolhe e os botões ficam à esquerda.
           Wrap(
             alignment: WrapAlignment.end,
             spacing: 8,

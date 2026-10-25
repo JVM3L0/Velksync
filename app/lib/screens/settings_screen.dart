@@ -100,8 +100,8 @@ class SettingsScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
                   child: Text(
-                    'Os temas acompanham o modo: Gruvbox nas versões clara e escura, Catppuccin no Latte '
-                    'quando claro e no sabor escolhido quando escuro.',
+                    'Os temas acompanham o modo: Velksync e Gruvbox nas versões clara e escura, Catppuccin '
+                    'no Latte quando claro e no sabor escolhido quando escuro.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
