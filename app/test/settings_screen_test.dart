@@ -40,6 +40,8 @@ void main() {
       await tester.pumpAndSettle();
       final first = family == ThemeFamily.gruvbox ? 'Original' : 'Macchiato';
       await tester.scrollUntilVisible(find.text(first), 200);
+      await tester.ensureVisible(find.text(first)); // inteiro na tela, não só na borda
+      await tester.pumpAndSettle();
       await tester.tap(find.text(first));
       await tester.pumpAndSettle();
       if (family == ThemeFamily.gruvbox) {

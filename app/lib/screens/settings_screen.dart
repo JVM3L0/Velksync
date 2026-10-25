@@ -30,6 +30,7 @@ class SettingsScreen extends StatelessWidget {
             Palette pick((Palette, Palette) p) => dark ? p.$2 : p.$1;
             List<Color> swatches(ThemeFamily f) => switch (f) {
               ThemeFamily.dynamic => [wall.surface, wall.primary, wall.secondary, wall.tertiary, wall.error],
+              ThemeFamily.velksync => pick(Palettes.velksync).swatches,
               ThemeFamily.gruvbox => pick(Palettes.gruvbox(settings.gruvbox)).swatches,
               ThemeFamily.catppuccin => pick(Palettes.catppuccin(settings.catppuccin)).swatches,
             };
@@ -78,7 +79,7 @@ class SettingsScreen extends StatelessWidget {
                         onSelectionChanged: (s) => settings.setCatppuccin(s.first),
                       ),
                     ),
-                    ThemeFamily.dynamic => const SizedBox(width: double.infinity),
+                    ThemeFamily.dynamic || ThemeFamily.velksync => const SizedBox(width: double.infinity),
                   },
                 ),
                 const SectionLabel('Modo'),

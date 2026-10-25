@@ -25,7 +25,7 @@ abstract final class Motion {
 }
 
 /// Used when the phone has no wallpaper colors (Android < 12, iOS).
-const fallbackSeed = Color(0xFF8B7CF6);
+const fallbackSeed = Color(0xFF4BA8E8); // gelo do ícone
 
 /// Wallpaper colors from Android come without the newer surface container
 /// roles, so the scheme is regenerated from their primary color.

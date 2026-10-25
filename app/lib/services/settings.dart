@@ -5,6 +5,7 @@ import '../ui/palettes.dart';
 
 enum ThemeFamily {
   dynamic('Dinâmico', 'Cores do papel de parede'),
+  velksync('Velksync', 'Gelo e marinho, as cores do ícone'),
   gruvbox('Gruvbox', 'Retrô e quente, suave ou original'),
   catppuccin('Catppuccin', 'Pastel: Latte, Frappé, Macchiato e Mocha');
 
@@ -27,6 +28,7 @@ class AppSettings extends ChangeNotifier {
   /// Paletas (clara, escura) da família escolhida; null no tema dinâmico.
   (Palette, Palette)? get palettes => switch (family) {
     ThemeFamily.dynamic => null,
+    ThemeFamily.velksync => Palettes.velksync,
     ThemeFamily.gruvbox => Palettes.gruvbox(gruvbox),
     ThemeFamily.catppuccin => Palettes.catppuccin(catppuccin),
   };

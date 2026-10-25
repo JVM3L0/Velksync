@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
-/// Paletas fixas (Gruvbox e Catppuccin) mapeadas para os papéis do Material 3.
+/// Paletas fixas (Velksync, Gruvbox e Catppuccin) mapeadas para os papéis do Material 3.
 /// Cores oficiais: github.com/morhetz/gruvbox, github.com/sainnhe/gruvbox-material
 /// e github.com/catppuccin/palette.
 
@@ -128,6 +128,38 @@ Color readable(Color fg, Color bg, {double min = 4.5}) {
 }
 
 abstract final class Palettes {
+  // Velksync: as cores do ícone (marinho do fundo, gelo das asas) com um toque
+  // lilás da Velkhana. Ver tools/icon/generate.py.
+  static const velksyncDark = Palette(
+    name: 'Velksync Dark',
+    brightness: Brightness.dark,
+    background: Color(0xFF0B1A33),
+    lowest: Color(0xFF060F22), // fundo do ícone
+    containers: [Color(0xFF0F2140), Color(0xFF16345F), Color(0xFF1D3F6E), Color(0xFF264B7E)],
+    text: Color(0xFFE6F4FF),
+    subtext: Color(0xFFA9C2DB),
+    outline: Color(0xFF6F8BAA),
+    primary: Color(0xFFA8DDFF), // gelo
+    secondary: Color(0xFF7FE3FF), // brilho
+    tertiary: Color(0xFFC3B5FF), // lilás
+    error: Color(0xFFFF8A8A),
+  );
+
+  static const velksyncLight = Palette(
+    name: 'Velksync Light',
+    brightness: Brightness.light,
+    background: Color(0xFFF4F9FF),
+    lowest: Color(0xFFFFFFFF),
+    containers: [Color(0xFFEAF3FD), Color(0xFFDFEBF8), Color(0xFFD2E2F3), Color(0xFFC4D7EC)],
+    text: Color(0xFF0B1A33),
+    subtext: Color(0xFF3D5674),
+    outline: Color(0xFF7189A6),
+    primary: Color(0xFF1F6FB5), // gelo profundo
+    secondary: Color(0xFF1C7A96),
+    tertiary: Color(0xFF6650B8),
+    error: Color(0xFFB3261E),
+  );
+
   static const gruvboxDark = Palette(
     name: 'Gruvbox Dark',
     brightness: Brightness.dark,
@@ -251,6 +283,8 @@ abstract final class Palettes {
   );
 
   static const all = [
+    velksyncDark,
+    velksyncLight,
     gruvboxDark,
     gruvboxLight,
     gruvboxSoftDark,
@@ -260,6 +294,8 @@ abstract final class Palettes {
     catppuccinFrappe,
     catppuccinLatte,
   ];
+
+  static const velksync = (velksyncLight, velksyncDark);
 
   static (Palette light, Palette dark) gruvbox(GruvboxVariant v) => switch (v) {
     GruvboxVariant.soft => (gruvboxSoftLight, gruvboxSoftDark),
