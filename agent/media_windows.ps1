@@ -29,31 +29,33 @@ $mgr = Await ($Manager::RequestAsync()) $Manager
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
+// [ComImport] e [PreserveSig] são obrigatórios: sem eles o .NET monta a chamada
+// COM de outro jeito e o SetMasterVolumeLevelScalar "dava certo" sem mudar nada.
 namespace Velksync {
-    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IAudioEndpointVolume {
-        int RegisterControlChangeNotify(IntPtr p);
-        int UnregisterControlChangeNotify(IntPtr p);
-        int GetChannelCount(out int n);
-        int SetMasterVolumeLevel(float level, ref Guid ctx);
-        int SetMasterVolumeLevelScalar(float level, ref Guid ctx);
-        int GetMasterVolumeLevel(out float level);
-        int GetMasterVolumeLevelScalar(out float level);
-        int SetChannelVolumeLevel(uint ch, float level, ref Guid ctx);
-        int SetChannelVolumeLevelScalar(uint ch, float level, ref Guid ctx);
-        int GetChannelVolumeLevel(uint ch, out float level);
-        int GetChannelVolumeLevelScalar(uint ch, out float level);
-        int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid ctx);
-        int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+        [PreserveSig] int RegisterControlChangeNotify(IntPtr p);
+        [PreserveSig] int UnregisterControlChangeNotify(IntPtr p);
+        [PreserveSig] int GetChannelCount(out int n);
+        [PreserveSig] int SetMasterVolumeLevel(float level, ref Guid ctx);
+        [PreserveSig] int SetMasterVolumeLevelScalar(float level, ref Guid ctx);
+        [PreserveSig] int GetMasterVolumeLevel(out float level);
+        [PreserveSig] int GetMasterVolumeLevelScalar(out float level);
+        [PreserveSig] int SetChannelVolumeLevel(uint ch, float level, ref Guid ctx);
+        [PreserveSig] int SetChannelVolumeLevelScalar(uint ch, float level, ref Guid ctx);
+        [PreserveSig] int GetChannelVolumeLevel(uint ch, out float level);
+        [PreserveSig] int GetChannelVolumeLevelScalar(uint ch, out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid ctx);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
     }
-    [Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDevice {
-        int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+        [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
     }
-    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IMMDeviceEnumerator {
-        int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
-        int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
+        [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
+        [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint);
     }
     [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
     class MMDeviceEnumerator { }
@@ -95,7 +97,7 @@ function State {
     $info = $s.GetPlaybackInfo()
     $tl = $s.GetTimelineProperties()
     $status = switch ([int]$info.PlaybackStatus) { 4 { 'playing' } 5 { 'paused' } default { 'stopped' } }
-    $dur = [Math]::Max(0, ($tl.EndTime - $tl.StartTime).TotalMilliseconds)
+    $dur = [Math]::Max(0.0, ($tl.EndTime - $tl.StartTime).TotalMilliseconds)
     $pos = $tl.Position.TotalMilliseconds
     # A posição vale para LastUpdatedTime; tocando, soma o tempo desde então.
     if ($status -eq 'playing') { $pos += ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalMilliseconds }
@@ -109,7 +111,7 @@ function State {
         title       = $p.Title
         artist      = $p.Artist
         album       = $p.AlbumTitle
-        position_ms = [int64][Math]::Max(0, $pos)
+        position_ms = [int64][Math]::Max(0.0, $pos)
         duration_ms = [int64]$dur
         can_seek    = [bool]$info.Controls.IsPlaybackPositionEnabled
         can_control = [bool]$info.Controls.IsPlayPauseToggleEnabled
@@ -155,7 +157,9 @@ function Seek([int64]$ms) {
 }
 
 function SetVolume($req) {
-    if ($null -ne $req.volume) { [Velksync.Audio]::SetVolume([float][Math]::Min(1, [Math]::Max(0, [double]$req.volume))) }
+    # 1.0/0.0, não 1/0: com o inteiro o PowerShell escolhe Math.Min(int, int) e
+    # arredonda o volume (0.98 virava 1, 0.4 virava 0).
+    if ($null -ne $req.volume) { [Velksync.Audio]::SetVolume([float][Math]::Min(1.0, [Math]::Max(0.0, [double]$req.volume))) }
     if ($null -ne $req.muted) { [Velksync.Audio]::SetMute([bool]$req.muted) }
     @{ ok = $true }
 }
