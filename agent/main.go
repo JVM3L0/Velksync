@@ -29,6 +29,8 @@ Uso:
   velksync-agent revoke <id ou nome>               revoga um celular (no dual boot, revogue nos dois sistemas)
   velksync-agent fingerprint                       mostra o pin do certificado TLS deste PC
   velksync-agent send <tipo> [texto]               envia ao celular: notify, open_url, clipboard, vibrate
+  velksync-agent presence-export -out <arquivo>    gera o arquivo do sinal de presença (usado pelo instalador)
+  velksync-agent presence -file <arquivo>          sinal de presença: só diz "ligado", roda antes do login
 
 Config padrão: %s
 `
@@ -73,6 +75,10 @@ func main() {
 		}
 	case "send":
 		err = sendCmd(*configPath, args)
+	case "presence-export":
+		err = presenceExportCmd(*configPath, args)
+	case "presence":
+		err = presenceCmd(args)
 	default:
 		flag.Usage()
 		os.Exit(2)

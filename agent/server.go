@@ -42,6 +42,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/devices/revoke", masterOnly(s.revokeDevice))
 	mux.HandleFunc("GET /api/info", s.info)
 	mux.HandleFunc("GET /api/stats", s.stats)
+	mux.HandleFunc("GET /api/presence", s.presenceKey)
 	mux.HandleFunc("GET /api/media", s.mediaState)
 	mux.HandleFunc("GET /api/media/art", s.mediaArt)
 	mux.HandleFunc("POST /api/media/seek", s.mediaSeek)
