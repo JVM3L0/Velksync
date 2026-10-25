@@ -58,3 +58,9 @@ func attachConsole() {
 func defaultLogPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "agent.log")
 }
+
+// O PowerShell não espera binários GUI, então o QR no console pode sair
+// embaralhado com o prompt; abrir a imagem é o caminho confiável.
+func openFile(path string) bool {
+	return hidden(exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", path)).Start() == nil
+}

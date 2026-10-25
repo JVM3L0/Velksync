@@ -20,12 +20,18 @@ import (
 const maxOutput = 64 << 10
 
 type Server struct {
-	cfg Config
-	hub *Hub
+	cfg   Config
+	hub   *Hub
+	pairs *Pairings
 }
 
 func (s *Server) routes() http.Handler {
+	if s.pairs == nil {
+		s.pairs = newPairings()
+	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/pair/start", s.pairStart)
+	mux.HandleFunc("GET /api/pair/status", s.pairStatus)
 	mux.HandleFunc("GET /api/info", s.info)
 	mux.HandleFunc("POST /api/power", s.power)
 	mux.HandleFunc("GET /api/commands", s.listCommands)
@@ -34,8 +40,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/events", s.events)
 	mux.HandleFunc("POST /api/push", s.push)
 
-	return s.auth(mux)
-
+	// Única rota sem token: protegida pelo código de uso único do QR.
+	root := http.NewServeMux()
+	root.HandleFunc("POST /api/pair/claim", s.pairClaim)
+	root.Handle("/", s.auth(mux))
+	return root
 }
 
 func (s *Server) auth(next http.Handler) http.Handler {

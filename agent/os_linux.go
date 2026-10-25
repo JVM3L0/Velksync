@@ -25,3 +25,6 @@ func shellCommand(ctx context.Context, line string) *exec.Cmd {
 func attachConsole() {}
 
 func defaultLogPath(string) string { return "" }
+
+// No Linux o QR já aparece no terminal.
+func openFile(string) bool { return false }

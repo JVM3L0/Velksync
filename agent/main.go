@@ -23,6 +23,7 @@ Uso:
   velksync-agent [-config arquivo]                 inicia o agente
   velksync-agent init [-token T] [-force]          cria a config (use o mesmo token nos dois sistemas do dual boot)
   velksync-agent token                             mostra o token
+  velksync-agent pair [-host IP]                   mostra um QR para parear o app
   velksync-agent send <tipo> [texto]               envia ao celular: notify, open_url, clipboard, vibrate
 
 Config padrão: %s
@@ -52,6 +53,8 @@ func main() {
 		if cfg, err = loadConfig(*configPath); err == nil {
 			fmt.Println(cfg.Token)
 		}
+	case "pair":
+		err = pairCmd(*configPath, args)
 	case "send":
 		err = sendCmd(*configPath, args)
 	default:
