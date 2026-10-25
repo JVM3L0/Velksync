@@ -131,7 +131,8 @@ func run(configPath, logPath string) error {
 			return err
 		}
 		log.Printf("primeira execução: config criada em %s", configPath)
-		log.Printf("token para parear o app: %s", cfg.Token)
+		// Nunca registrar o token: logs são lidos e copiados por aí.
+		log.Printf("para parear um celular: velksync-agent pair")
 	} else if err != nil {
 		return err
 	}
