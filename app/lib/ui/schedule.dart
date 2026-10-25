@@ -63,6 +63,8 @@ class ScheduleBanner extends StatelessWidget {
 /// Escolha do agendamento: o que fazer e quando.
 Future<ScheduleChoice?> showScheduleSheet(BuildContext context) => showModalBottomSheet<ScheduleChoice>(
   context: context,
+  // Sem isso o painel para em ~56% da tela e a última opção fica cortada.
+  isScrollControlled: true,
   builder: (context) {
     var action = 'shutdown';
     return StatefulBuilder(
@@ -73,7 +75,7 @@ Future<ScheduleChoice?> showScheduleSheet(BuildContext context) => showModalBott
           onTap: () => Navigator.pop(context, (action: action, delay: delay, whenMediaStops: media)),
         );
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,

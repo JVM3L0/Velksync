@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:velksync/models/device.dart';
 import 'package:velksync/ui/schedule.dart';
 
 void main() {
+  sheetFits();
   final now = DateTime(2026, 10, 25, 23, 0);
   PowerSchedule at(Duration d, {String action = 'shutdown', bool media = false}) => PowerSchedule.fromJson({
     'action': action,
@@ -38,4 +40,39 @@ void main() {
     expect(AgentInfo.fromJson({'os': 'linux', 'schedule': null}).schedule, isNull);
     expect(AgentInfo.fromJson({'os': 'linux'}).has('live'), isFalse, reason: 'agente antigo');
   });
+}
+
+// O painel de agendamento cabe numa tela de celular sem cortar a última opção.
+void sheetFits() {
+  for (final scale in [1.0, 1.3]) {
+    testWidgets('painel de agendamento sem overflow (fonte ${scale}x)', (tester) async {
+      tester.view.physicalSize = const Size(1220, 2712); // motorola edge 70
+      // Densidade alta = "Tamanho da tela" aumentado nas configurações do Android.
+      tester.view.devicePixelRatio = 4;
+      addTearDown(tester.view.reset);
+      ScheduleChoice? picked;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async => picked = await showScheduleSheet(context),
+              child: const Text('abrir'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('abrir'));
+      await tester.pumpAndSettle();
+      final last = find.text('Quando a mídia parar');
+      await tester.ensureVisible(last);
+      await tester.pumpAndSettle();
+      await tester.tap(last);
+      await tester.pumpAndSettle();
+      expect(picked?.whenMediaStops, isTrue);
+    });
+  }
 }
