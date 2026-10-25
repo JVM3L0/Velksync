@@ -94,12 +94,18 @@ class AgentInfo {
   final String mac;
   final bool allowShell;
 
+  /// O que este agente sabe fazer além do básico (ex.: "live", "presence").
+  final Set<String> features;
+
+  bool has(String feature) => features.contains(feature);
+
   AgentInfo.fromJson(Map<String, dynamic> j)
     : name = j['name'] as String? ?? '',
       hostname = j['hostname'] as String? ?? '',
       os = j['os'] as String? ?? '',
       mac = j['mac'] as String? ?? '',
-      allowShell = j['allow_shell'] as bool? ?? false;
+      allowShell = j['allow_shell'] as bool? ?? false,
+      features = {for (final f in j['features'] as List? ?? const []) f.toString()};
 
   String get osLabel => osLabelOf(os);
 }

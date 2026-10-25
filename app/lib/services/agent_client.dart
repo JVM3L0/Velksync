@@ -23,7 +23,8 @@ class AgentClient {
 
   AgentClient(this.device);
 
-  Uri _uri(String path) => Uri(scheme: 'https', host: device.host, port: device.port, path: path);
+  Uri _uri(String path, [Map<String, String>? query]) =>
+      Uri(scheme: 'https', host: device.host, port: device.port, path: path, queryParameters: query);
 
   Map<String, String> get _headers => {
     if (device.deviceId.isNotEmpty) 'Authorization': 'Bearer ${device.deviceId}:${device.token}',
@@ -136,10 +137,32 @@ class AgentClient {
 
   /// Server-sent events from the PC. Completes when the connection drops;
   /// cancelling the subscription closes the connection right away.
-  Stream<PcEvent> events() {
+  Stream<PcEvent> events() => _decoded(_sse('/api/events'), PcEvent.fromJson);
+
+  /// Stats do PC empurrados pelo agente (feature "live"), em vez de polling.
+  Stream<PcStats> liveStats() => _live('stats', PcStats.fromJson);
+
+  /// Mídia empurrada pelo agente só quando muda (feature "live").
+  Stream<MediaState> liveMedia() => _live('media', MediaState.fromJson);
+
+  Stream<T> _live<T>(String topic, T Function(Map<String, dynamic>) parse) =>
+      _decoded(_sse('/api/live', {'topics': topic}).where((m) => m.event == topic), parse);
+
+  static Stream<T> _decoded<T>(Stream<({String event, String data})> s, T Function(Map<String, dynamic>) parse) =>
+      s.expand((m) {
+        try {
+          return [parse(jsonDecode(m.data) as Map<String, dynamic>)];
+        } on FormatException {
+          return const []; // evento malformado, ignora
+        }
+      });
+
+  /// Lê um fluxo SSE pela conexão fixada. O agente manda um ping a cada 20 s;
+  /// sem nada por 45 s a conexão morreu e o fluxo termina com erro.
+  Stream<({String event, String data})> _sse(String path, [Map<String, String>? query]) {
     final client = pinnedClient(device.pin);
     StreamSubscription<String>? lines;
-    late final StreamController<PcEvent> out;
+    late final StreamController<({String event, String data})> out;
     void finish([Object? error]) {
       client.close();
       if (out.isClosed) return;
@@ -147,24 +170,25 @@ class AgentClient {
       out.close();
     }
 
-    out = StreamController<PcEvent>(
+    out = StreamController(
       onListen: () async {
         try {
-          final req = http.Request('GET', _uri('/api/events'))..headers.addAll(_headers);
+          final req = http.Request('GET', _uri(path, query))..headers.addAll(_headers);
           final res = await client.send(req).timeout(const Duration(seconds: 5));
           if (res.statusCode != 200) throw AgentException('Erro ${res.statusCode}');
-          // O agente manda um ping a cada 20s; sem nada por 45s a conexão morreu.
+          var event = 'message';
           lines = res.stream
               .timeout(const Duration(seconds: 45))
               .transform(utf8.decoder)
               .transform(const LineSplitter())
               .listen(
                 (line) {
-                  if (!line.startsWith('data: ')) return;
-                  try {
-                    out.add(PcEvent.fromJson(jsonDecode(line.substring(6)) as Map<String, dynamic>));
-                  } on FormatException {
-                    // evento malformado, ignora
+                  if (line.isEmpty) {
+                    event = 'message';
+                  } else if (line.startsWith('event: ')) {
+                    event = line.substring(7);
+                  } else if (line.startsWith('data: ')) {
+                    out.add((event: event, data: line.substring(6)));
                   }
                 },
                 onError: finish,

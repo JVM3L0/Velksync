@@ -36,6 +36,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   int _tab = 0; // 0 controle, 1 desempenho, 2 mídia
   Timer? _poll;
   Timer? _statsPoll;
+  StreamSubscription<PcStats>? _liveStats; // agente com "live": ele empurra os stats
 
   @override
   void initState() {
@@ -53,12 +54,13 @@ class _DeviceScreenState extends State<DeviceScreen> {
     _wakes.removeListener(_onWake);
     _poll?.cancel();
     _statsPoll?.cancel();
+    _liveStats?.cancel();
     _client.close();
     super.dispose();
   }
 
   Future<void> _refreshStats() async {
-    if (_tab != 1) return; // só consulta com a aba visível
+    if (_tab != 1 || _liveStats != null) return; // só com a aba visível e sem canal ao vivo
     if (_info == null) {
       if (_stats != null) setState(() => _stats = null);
       return;
@@ -96,6 +98,26 @@ class _DeviceScreenState extends State<DeviceScreen> {
       _commands = state.info == null ? [] : commands;
       _checked = true;
     });
+    _syncLiveStats();
+  }
+
+  /// Abre o canal ao vivo só com a aba Desempenho visível; se cair, o polling
+  /// assume e o próximo _refresh tenta de novo.
+  void _syncLiveStats() {
+    final want = _tab == 1 && (_info?.has('live') ?? false);
+    if (want && _liveStats == null) {
+      void lost([Object? _]) => _liveStats = null;
+      _liveStats = _client.liveStats().listen(
+        (s) {
+          if (mounted) setState(() => _stats = s);
+        },
+        onError: lost,
+        onDone: lost,
+      );
+    } else if (!want && _liveStats != null) {
+      _liveStats!.cancel();
+      _liveStats = null;
+    }
   }
 
   void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -178,7 +200,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
         index: online ? _tab : 0,
         child: switch (online ? _tab : 0) {
           1 => _performanceTab(),
-          2 => MediaPanel(client: _client),
+          2 => MediaPanel(client: _client, live: _info?.has('live') ?? false),
           _ => _controlTab(d, status, online, scheme),
         },
       ),
@@ -192,6 +214,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 selectedIndex: _tab,
                 onDestinationSelected: (i) {
                   setState(() => _tab = i);
+                  _syncLiveStats();
                   if (i == 1) _refreshStats();
                 },
                 destinations: const [

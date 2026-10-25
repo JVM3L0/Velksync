@@ -17,10 +17,12 @@ String formatTime(int ms) {
 }
 
 /// Aba de mídia: o que está tocando no PC, com controles, no estilo do player
-/// do Caelestia. Só consulta o PC enquanto está na tela.
+/// do Caelestia. Só consulta o PC enquanto está na tela: com [live], o agente
+/// avisa quando algo muda; sem, pergunta a cada segundo (agentes antigos).
 class MediaPanel extends StatefulWidget {
   final AgentClient client;
-  const MediaPanel({super.key, required this.client});
+  final bool live;
+  const MediaPanel({super.key, required this.client, this.live = false});
 
   @override
   State<MediaPanel> createState() => _MediaPanelState();
@@ -30,7 +32,8 @@ class _MediaPanelState extends State<MediaPanel> {
   MediaState? _state;
   Uint8List? _art;
   String _artId = '';
-  Timer? _poll, _tick;
+  Timer? _poll, _tick, _retryLive;
+  StreamSubscription<MediaState>? _live;
   DateTime _stamp = DateTime.now(); // quando _state foi lido (para avançar a posição)
   double? _dragPosition, _dragVolume;
   DateTime _lastVolumeSent = DateTime(0);
@@ -41,8 +44,11 @@ class _MediaPanelState extends State<MediaPanel> {
   @override
   void initState() {
     super.initState();
-    _refresh();
-    _poll = Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
+    if (widget.live) {
+      _startLive();
+    } else {
+      _startPolling();
+    }
     // Avança a barra suavemente entre as leituras.
     _tick = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (mounted && (_state?.playing ?? false) && _dragPosition == null) setState(() {});
@@ -53,24 +59,52 @@ class _MediaPanelState extends State<MediaPanel> {
   void dispose() {
     _poll?.cancel();
     _tick?.cancel();
+    _retryLive?.cancel();
+    _live?.cancel();
     super.dispose();
+  }
+
+  void _startPolling() {
+    _refresh();
+    _poll ??= Timer.periodic(const Duration(seconds: 1), (_) => _refresh());
+  }
+
+  void _startLive() {
+    _live = _c.liveMedia().listen(_apply, onError: (_) => _liveLost(), onDone: _liveLost);
+  }
+
+  /// Caiu o canal ao vivo: pergunta enquanto isso e tenta voltar depois.
+  void _liveLost() {
+    _live = null;
+    if (!mounted) return;
+    _startPolling();
+    _retryLive?.cancel();
+    _retryLive = Timer(const Duration(seconds: 15), () {
+      if (!mounted) return;
+      _poll?.cancel();
+      _poll = null;
+      _startLive();
+    });
   }
 
   Future<void> _refresh() async {
     try {
-      final st = await _c.media();
-      if (!mounted) return;
-      setState(() {
-        _state = st;
-        _stamp = DateTime.now();
-      });
-      if (st.artId != _artId) {
-        _artId = st.artId;
-        final art = st.artId.isEmpty ? null : await _c.mediaArt();
-        if (mounted && _artId == st.artId) setState(() => _art = art);
-      }
+      await _apply(await _c.media());
     } on AgentException {
       // queda momentânea: mantém o último estado
+    }
+  }
+
+  Future<void> _apply(MediaState st) async {
+    if (!mounted) return;
+    setState(() {
+      _state = st;
+      _stamp = DateTime.now();
+    });
+    if (st.artId != _artId) {
+      _artId = st.artId;
+      final art = st.artId.isEmpty ? null : await _c.mediaArt();
+      if (mounted && _artId == st.artId) setState(() => _art = art);
     }
   }
 
