@@ -9,6 +9,7 @@ import '../services/pc_probe.dart';
 import '../services/wake_tracker.dart';
 import '../ui/media_panel.dart';
 import '../ui/perf.dart';
+import '../ui/schedule.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
 import '../ui/wake_help.dart';
@@ -150,6 +151,27 @@ class _DeviceScreenState extends State<DeviceScreen> {
     }
   }
 
+  Future<void> _schedule() async {
+    final choice = await showScheduleSheet(context);
+    if (choice == null) return;
+    try {
+      await _client.schedulePower(choice.action, delay: choice.delay, whenMediaStops: choice.whenMediaStops);
+    } on AgentException catch (e) {
+      _snack(e.message);
+    }
+    await _refresh();
+  }
+
+  Future<void> _cancelSchedule() async {
+    try {
+      await _client.cancelSchedule();
+      _snack('Agendamento cancelado');
+    } on AgentException catch (e) {
+      _snack(e.message);
+    }
+    await _refresh();
+  }
+
   Future<void> _run(PresetCommand c) async {
     setState(() => _running = c.id);
     try {
@@ -248,7 +270,16 @@ class _DeviceScreenState extends State<DeviceScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           _hero(status),
-          const SectionLabel('Energia'),
+          SectionLabel(
+            'Energia',
+            action: online && _info!.has('schedule')
+                ? TextButton.icon(
+                    onPressed: _schedule,
+                    icon: const Icon(Symbols.schedule_rounded),
+                    label: const Text('Agendar'),
+                  )
+                : null,
+          ),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -290,6 +321,14 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 onTap: online ? () => _power('sleep', 'Suspender') : null,
               ),
             ],
+          ),
+          AnimatedSize(
+            duration: Motion.spatialDuration,
+            curve: Motion.effects,
+            alignment: Alignment.topCenter,
+            child: _info?.schedule == null
+                ? const SizedBox(width: double.infinity)
+                : ScheduleBanner(schedule: _info!.schedule!, onCancel: _cancelSchedule),
           ),
           if (d.mac.isEmpty)
             Padding(

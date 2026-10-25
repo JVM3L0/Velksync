@@ -97,6 +97,9 @@ class AgentInfo {
   /// O que este agente sabe fazer além do básico (ex.: "live", "presence").
   final Set<String> features;
 
+  /// Desligar/suspender agendado no PC, se houver.
+  final PowerSchedule? schedule;
+
   bool has(String feature) => features.contains(feature);
 
   AgentInfo.fromJson(Map<String, dynamic> j)
@@ -105,7 +108,8 @@ class AgentInfo {
       os = j['os'] as String? ?? '',
       mac = j['mac'] as String? ?? '',
       allowShell = j['allow_shell'] as bool? ?? false,
-      features = {for (final f in j['features'] as List? ?? const []) f.toString()};
+      features = {for (final f in j['features'] as List? ?? const []) f.toString()},
+      schedule = j['schedule'] is Map ? PowerSchedule.fromJson(j['schedule'] as Map<String, dynamic>) : null;
 
   String get osLabel => osLabelOf(os);
 }
@@ -219,3 +223,17 @@ String osLabelOf(String os) => switch (os) {
   'linux' => 'Linux',
   _ => os,
 };
+
+class PowerSchedule {
+  final String action; // shutdown ou sleep
+  /// Quando executa; null enquanto espera a mídia parar.
+  final DateTime? at;
+  final bool whenMediaStops;
+
+  PowerSchedule.fromJson(Map<String, dynamic> j)
+    : action = j['action'] as String? ?? 'shutdown',
+      at = (j['at'] as num?) == null || j['at'] == 0
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch((j['at'] as num).toInt() * 1000),
+      whenMediaStops = j['when_media_stops'] as bool? ?? false;
+}

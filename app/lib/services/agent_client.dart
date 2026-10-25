@@ -121,6 +121,15 @@ class AgentClient {
   /// action: shutdown, reboot ou sleep.
   Future<void> power(String action) => _send('POST', '/api/power', body: {'action': action});
 
+  /// Agenda shutdown ou sleep: daqui a [delay] ou quando a mídia parar.
+  Future<void> schedulePower(String action, {Duration? delay, bool whenMediaStops = false}) => _send(
+    'POST',
+    '/api/power',
+    body: {'action': action, 'delay_s': ?delay?.inSeconds, if (whenMediaStops) 'when': 'media_stopped'},
+  );
+
+  Future<void> cancelSchedule() => _send('DELETE', '/api/power/schedule');
+
   Future<List<PresetCommand>> commands() async => [
     for (final c in await _send('GET', '/api/commands') as List) PresetCommand.fromJson(c as Map<String, dynamic>),
   ];
