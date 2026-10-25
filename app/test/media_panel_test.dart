@@ -133,4 +133,60 @@ void main() {
     expect(find.byType(VerticalVolume), findsNothing, reason: 'fechou depois de 5 s parado');
     await tester.pumpWidget(const SizedBox());
   });
+
+  group('proteção contra toque acidental (capa de 280 px: pula a partir de 112)', () {
+    Future<FakePc> open(WidgetTester tester) async {
+      final pc = FakePc();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: MediaPanel(client: pc)),
+        ),
+      );
+      await tester.pump();
+      return pc;
+    }
+
+    testWidgets('arrastar menos de 40% e soltar devolve a capa', (tester) async {
+      final pc = await open(tester);
+      await tester.timedDrag(find.byType(MediaCover), const Offset(-100, 0), const Duration(milliseconds: 800));
+      await tester.pumpAndSettle();
+      expect(pc.sent, isEmpty);
+      expect(find.text('Numb'), findsOneWidget);
+    });
+
+    testWidgets('passar do ponto e voltar o dedo cancela', (tester) async {
+      final pc = await open(tester);
+      final g = await tester.startGesture(tester.getCenter(find.byType(MediaCover)));
+      for (var i = 0; i < 10; i++) {
+        await g.moveBy(const Offset(-20, 0)); // 200 px: armado
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await tester.pump(const Duration(milliseconds: 200));
+      for (var i = 0; i < 10; i++) {
+        await g.moveBy(const Offset(18, 0)); // volta para 20 px
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await tester.pump(const Duration(milliseconds: 300));
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(pc.sent, isEmpty);
+    });
+
+    testWidgets('piparote rápido mas curto não pula', (tester) async {
+      final pc = await open(tester);
+      await tester.fling(find.byType(MediaCover), const Offset(-50, 0), 3000);
+      await tester.pumpAndSettle();
+      expect(pc.sent, isEmpty);
+    });
+
+    testWidgets('piparote rápido e longo pula', (tester) async {
+      final pc = await open(tester);
+      await tester.fling(find.byType(MediaCover), const Offset(-90, 0), 3000);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(pc.sent, ['next']);
+      await tester.pumpAndSettle();
+      expect(find.text('Faint'), findsOneWidget);
+    });
+  });
 }

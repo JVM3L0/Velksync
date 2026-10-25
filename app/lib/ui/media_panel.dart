@@ -49,6 +49,12 @@ class _MediaPanelState extends State<MediaPanel> {
   int _direction = 1; // 1 próxima, -1 anterior
   double _dragDx = 0; // arrasto da capa com o dedo
   bool _dragging = false;
+  bool _armed = false; // passou do ponto: soltar pula de faixa
+  bool _flown = false; // a capa saiu voando e espera a faixa nova
+  bool _snap = false; // volta ao centro sem animar (a faixa nova entra pela transição)
+  bool _hideOut = false; // esconde a capa antiga até a troca terminar
+  Timer? _unhide;
+  Timer? _flyBack;
   Timer? _volumeHide;
   final _volumeLink = LayerLink();
   final _volumePopup = OverlayPortalController(); // balão do volume
@@ -78,6 +84,8 @@ class _MediaPanelState extends State<MediaPanel> {
     _tick?.cancel();
     _retryLive?.cancel();
     _volumeHide?.cancel();
+    _flyBack?.cancel();
+    _unhide?.cancel();
     _live?.cancel();
     _smoother.dispose();
     super.dispose();
@@ -139,6 +147,19 @@ class _MediaPanelState extends State<MediaPanel> {
       if (prev != null && _trackKey(prev) != _trackKey(st)) {
         _trackIndex += _direction;
         _direction = 1; // trocas sem toque (fim da faixa) vêm "para a frente"
+        // A capa que saiu voando volta ao centro já como a faixa nova, sem
+        // animar: quem entra deslizando do outro lado é a transição de faixa.
+        _flyBack?.cancel();
+        if (_flown) {
+          _snap = true;
+          _flown = false;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _snap = false);
+          _unhide?.cancel();
+          _unhide = Timer(const Duration(milliseconds: 700), () {
+            if (mounted) setState(() => _hideOut = false);
+          });
+        }
+        _dragDx = 0;
       }
       _state = st;
       _artId = st.artId;
@@ -279,7 +300,13 @@ class _MediaPanelState extends State<MediaPanel> {
     // As cores da capa valem só aqui dentro; trocam suavemente entre faixas.
     return AnimatedTheme(
       // Barras finas, como nos players (o padrão do M3 Expressive é 16 px).
-      data: base.copyWith(colorScheme: scheme, sliderTheme: base.sliderTheme.copyWith(trackHeight: 6)),
+      data: base.copyWith(
+        colorScheme: scheme,
+        // O tema do app fixa cor de texto e ícone; aqui seguem a capa.
+        textTheme: base.textTheme.apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface),
+        iconTheme: base.iconTheme.copyWith(color: scheme.onSurfaceVariant),
+        sliderTheme: base.sliderTheme.copyWith(trackHeight: 6),
+      ),
       duration: Motion.spatialDuration,
       curve: Motion.effects,
       child: Builder(builder: (context) => _player(context, st)),
@@ -306,7 +333,7 @@ class _MediaPanelState extends State<MediaPanel> {
               const SizedBox(height: 24),
               _titles(st, scheme, text),
               const SizedBox(height: 12),
-              if (st.available) _progress(st, scheme, text),
+              if (st.available) _progress(context, st, scheme, text),
               const SizedBox(height: 4),
               _controls(st, scheme),
             ],
@@ -316,7 +343,7 @@ class _MediaPanelState extends State<MediaPanel> {
           if (box.maxHeight < 560) {
             return SingleChildScrollView(
               padding: pad,
-              child: Column(children: [_cover(st, (box.maxWidth - 48).clamp(0.0, 280.0)), bottom]),
+              child: Column(children: [_cover(context, st, (box.maxWidth - 48).clamp(0.0, 280.0)), bottom]),
             );
           }
           // Senão, tudo na tela: a capa fica com exatamente o espaço que sobra.
@@ -326,7 +353,8 @@ class _MediaPanelState extends State<MediaPanel> {
               children: [
                 Expanded(
                   child: LayoutBuilder(
-                    builder: (context, area) => Center(child: _cover(st, area.maxHeight.clamp(0.0, area.maxWidth))),
+                    builder: (context, area) =>
+                        Center(child: _cover(context, st, area.maxHeight.clamp(0.0, area.maxWidth))),
                   ),
                 ),
                 bottom,
@@ -338,45 +366,129 @@ class _MediaPanelState extends State<MediaPanel> {
     );
   }
 
-  /// Capa: desliza para o lado da troca (como Spotify e YouTube Music) e dá
-  /// para arrastá-la com o dedo para pular de faixa.
-  Widget _cover(MediaState st, double side) {
+  /// Capa: dá para arrastá-la para pular de faixa. Segue o dedo, inclina e
+  /// mostra ⏭/⏮ no lado revelado; só pula depois de 40% da largura (ou num
+  /// gesto rápido e longo), com vibração no ponto. Voltar o dedo cancela.
+  Widget _cover(BuildContext context, MediaState st, double side) {
     final swipe = st.available && st.canControl;
-    return GestureDetector(
-      onHorizontalDragStart: swipe ? (_) => setState(() => _dragging = true) : null,
-      // Com resistência: a capa acompanha o dedo, mas um pouco atrás.
-      onHorizontalDragUpdate: swipe ? (d) => setState(() => _dragDx += d.delta.dx * 0.6) : null,
-      onHorizontalDragEnd: swipe
-          ? (d) {
-              final v = d.primaryVelocity ?? 0;
-              final far = _dragDx.abs() > 72;
-              final toward = far ? _dragDx : v;
-              setState(() {
-                _dragging = false;
-                _dragDx = 0;
-              });
-              if (far || v.abs() > 700) {
-                HapticFeedback.selectionClick();
-                _skip(toward < 0 ? 'next' : 'previous');
-              }
-            }
-          : null,
-      child: AnimatedContainer(
-        duration: _dragging ? Duration.zero : Motion.spatialFastDuration,
-        curve: Motion.spatial,
-        transform: Matrix4.translationValues(_dragDx, 0, 0),
-        child: SharedAxisSwitcher(
-          index: _trackIndex,
-          distance: 160,
-          child: MediaCover(
-            art: st.available ? _art : null,
-            artId: _artId,
-            available: st.available,
-            playing: st.playing,
-            side: side,
-            aspect: _artAspect,
+    final width = MediaQuery.sizeOf(context).width;
+    final threshold = side * 0.4;
+    final p = (_dragDx.abs() / threshold).clamp(0.0, 1.0);
+    final scheme = Theme.of(context).colorScheme;
+
+    void update(double dx) {
+      final armed = dx.abs() >= threshold;
+      if (armed != _armed) armed ? HapticFeedback.mediumImpact() : HapticFeedback.selectionClick();
+      setState(() {
+        _dragDx = dx;
+        _armed = armed;
+      });
+    }
+
+    void release(double velocity) {
+      final fling = velocity.abs() > 1200 && _dragDx.abs() >= 80 && velocity.sign == _dragDx.sign;
+      final go = _armed || fling;
+      final toward = _dragDx;
+      setState(() {
+        _dragging = false;
+        _armed = false;
+        if (go) {
+          _flown = true;
+          _hideOut = true;
+          _dragDx = toward.sign * (width + side); // sai voando da tela
+        } else {
+          _dragDx = 0; // volta com mola
+        }
+      });
+      if (!go) return;
+      _skip(toward < 0 ? 'next' : 'previous');
+      // Se a faixa não mudar (player recusou), a capa volta.
+      _flyBack?.cancel();
+      _flyBack = Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _dragDx = 0;
+            _hideOut = false;
+          });
+        }
+      });
+    }
+
+    final cover = AnimatedContainer(
+      duration: _dragging || _snap
+          ? Duration.zero
+          : _flown && _dragDx != 0
+          ? const Duration(milliseconds: 240)
+          : Motion.spatialDuration,
+      curve: _flown && _dragDx != 0 ? Curves.easeIn : Motion.spatial,
+      transformAlignment: Alignment.bottomCenter,
+      transform: Matrix4.identity()
+        ..translateByDouble(_dragDx, 0, 0, 1)
+        ..rotateZ(_dragDx / width * 0.15)
+        ..scaleByDouble(1 - 0.08 * p, 1 - 0.08 * p, 1, 1),
+      // Depois do quadro: o fim da animação pode cair no meio de um build.
+      onEnd: () => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _dragDx == 0 && _flown) setState(() => _flown = false);
+      }),
+      child: SharedAxisSwitcher(
+        index: _trackIndex,
+        distance: width * 0.9,
+        duration: const Duration(milliseconds: 650),
+        hideOutgoing: _hideOut,
+        child: MediaCover(
+          art: st.available ? _art : null,
+          artId: _artId,
+          available: st.available,
+          playing: st.playing,
+          side: side,
+          aspect: _artAspect,
+        ),
+      ),
+    );
+
+    // ⏭ à direita ao arrastar para a esquerda (e vice-versa); cheio quando armado.
+    final next = _dragDx < 0;
+    final hint = IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: _dragging ? p : 0,
+        duration: Motion.effectsDuration,
+        child: Align(
+          alignment: next ? Alignment.centerRight : Alignment.centerLeft,
+          child: AnimatedContainer(
+            duration: Motion.spatialFastDuration,
+            curve: Motion.spatialFast,
+            width: _armed ? 64 : 48,
+            height: _armed ? 64 : 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _armed ? scheme.primary : scheme.surfaceContainerHigh,
+            ),
+            child: Icon(
+              next ? Symbols.skip_next_rounded : Symbols.skip_previous_rounded,
+              fill: 1,
+              size: _armed ? 32 : 24,
+              color: _armed ? scheme.onPrimary : scheme.onSurfaceVariant,
+            ),
           ),
         ),
+      ),
+    );
+
+    return GestureDetector(
+      onHorizontalDragStart: swipe
+          ? (_) => setState(() {
+              _dragging = true;
+              _flyBack?.cancel();
+            })
+          : null,
+      onHorizontalDragUpdate: swipe ? (d) => update(_dragDx + d.delta.dx) : null,
+      onHorizontalDragEnd: swipe ? (d) => release(d.primaryVelocity ?? 0) : null,
+      onHorizontalDragCancel: swipe ? () => release(0) : null,
+      child: Stack(
+        children: [
+          cover,
+          Positioned.fill(child: hint),
+        ],
       ),
     );
   }
@@ -387,7 +499,8 @@ class _MediaPanelState extends State<MediaPanel> {
     final muted = text.labelLarge?.copyWith(color: scheme.onSurfaceVariant);
     final info = SharedAxisSwitcher(
       index: _trackIndex,
-      distance: 48,
+      distance: 96,
+      duration: const Duration(milliseconds: 650),
       child: SizedBox(
         width: double.infinity,
         child: Column(
@@ -441,7 +554,7 @@ class _MediaPanelState extends State<MediaPanel> {
   }
 
   /// Barra fina do Material 3 Expressive, alinhada às bordas do conteúdo.
-  Widget _progress(MediaState st, ColorScheme scheme, TextTheme text) {
+  Widget _progress(BuildContext context, MediaState st, ColorScheme scheme, TextTheme text) {
     final dur = st.durationMs;
     final pos = _dragPosition?.round() ?? _position;
     final enabled = st.canSeek && dur > 0;
@@ -543,14 +656,14 @@ class _MediaPanelState extends State<MediaPanel> {
         followerAnchor: Alignment.bottomCenter,
         child: Align(
           alignment: Alignment.bottomCenter,
-          child: TapRegion(onTapOutside: (_) => _closeVolume(), child: _volumePill(st)),
+          child: TapRegion(onTapOutside: (_) => _closeVolume(), child: _volumePill(context, st)),
         ),
       ),
       child: button,
     ),
   );
 
-  Widget _volumePill(MediaState st) {
+  Widget _volumePill(BuildContext context, MediaState st) {
     final scheme = Theme.of(context).colorScheme;
     final muted = st.muted ?? false;
     final v = (_dragVolume ?? st.volume ?? 0).clamp(0.0, 1.0);

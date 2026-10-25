@@ -120,7 +120,18 @@ class SharedAxisSwitcher extends StatefulWidget {
 
   /// Quanto o conteúdo desliza; maior para elementos grandes (capa do álbum).
   final double distance;
-  const SharedAxisSwitcher({super.key, required this.index, required this.child, this.distance = 36});
+  final Duration duration;
+
+  /// Esconde quem sai (ex.: a capa já saiu voando da tela com o gesto).
+  final bool hideOutgoing;
+  const SharedAxisSwitcher({
+    super.key,
+    required this.index,
+    required this.child,
+    this.distance = 36,
+    this.duration = Motion.spatialDuration,
+    this.hideOutgoing = false,
+  });
 
   @override
   State<SharedAxisSwitcher> createState() => _SharedAxisSwitcherState();
@@ -139,11 +150,12 @@ class _SharedAxisSwitcherState extends State<SharedAxisSwitcher> {
   Widget build(BuildContext context) {
     final key = ValueKey(widget.index);
     return AnimatedSwitcher(
-      duration: Motion.spatialDuration,
+      duration: widget.duration,
       reverseDuration: Motion.spatialFastDuration,
       layoutBuilder: (current, previous) => Stack(children: [...previous, ?current]),
       transitionBuilder: (child, animation) {
         final incoming = child.key == key;
+        if (!incoming && widget.hideOutgoing) return const SizedBox.shrink();
         final slide = CurvedAnimation(parent: animation, curve: Motion.spatial, reverseCurve: Motion.effects);
         // A que entra espera a outra sair; a que sai some no primeiro terço.
         final opacity = CurvedAnimation(
