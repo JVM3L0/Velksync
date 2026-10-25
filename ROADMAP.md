@@ -106,6 +106,7 @@ uso, testes e esboço antes de implementar.
 | 8 | Instalar e testar o agente no Linux do dual boot | pequeno | com o dono do projeto |
 | 9 | Acesso fora de casa com Tailscale | médio | mais configuração e docs que código |
 | 10 | Avisos do PC com o app fechado | grande | custo de bateria ou privacidade |
+| 11 | Primeira vez guiada: o que é o agente, QR e teste de ligar ("Funcionou?") | médio | hoje quem instala cai numa tela vazia |
 
 Também: assistente opcional (Gemini).
 
