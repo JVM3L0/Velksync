@@ -17,14 +17,19 @@ import (
 // ela muda. Separado de /api/events, que leva ordens ao celular.
 
 const (
-	liveTick         = time.Second
-	liveStatsEvery   = 2 // ticks
-	maxLivePerClient = 2
+	liveTick       = time.Second
+	liveStatsEvery = 2 // ticks
+	// Desempenho fica aberto em todas as abas do PC e a mídia na dela; o
+	// terceiro cobre a troca de aba antes de o canal antigo fechar.
+	maxLivePerClient = 3
 	// Salto de posição maior que isso (fora o andamento normal) é um seek.
 	liveSeekSlackMs = 1500
 )
 
 var (
+	// Depois de um comando de mídia o player muda em instantes: lê de novo
+	// nestes momentos em vez de esperar o próximo tique.
+	liveBurst        = []time.Duration{150 * time.Millisecond, 400 * time.Millisecond, 800 * time.Millisecond, 1500 * time.Millisecond}
 	liveTopics       = map[string]bool{"stats": true, "media": true}
 	errTooManyStream = errors.New("canais ao vivo demais para este celular")
 )
@@ -44,6 +49,8 @@ type Live struct {
 	stats func() any
 	media func() MediaState
 	tick  time.Duration
+	burst []time.Duration
+	kick  chan struct{}
 
 	mu      sync.Mutex
 	subs    map[*liveSub]struct{}
@@ -52,7 +59,26 @@ type Live struct {
 }
 
 func newLive(stats func() any, media func() MediaState) *Live {
-	return &Live{stats: stats, media: media, tick: liveTick, subs: map[*liveSub]struct{}{}}
+	return &Live{
+		stats: stats, media: media, tick: liveTick, burst: liveBurst,
+		kick: make(chan struct{}, 1), subs: map[*liveSub]struct{}{},
+	}
+}
+
+// Kick avisa que a mídia deve mudar já (próxima, anterior, play, seek): o
+// laço lê o player algumas vezes seguidas até ver a mudança. Sem ninguém
+// inscrito não faz nada; vários seguidos viram uma rajada só.
+func (l *Live) Kick() {
+	l.mu.Lock()
+	running := l.running
+	l.mu.Unlock()
+	if !running {
+		return
+	}
+	select {
+	case l.kick <- struct{}{}:
+	default:
+	}
 }
 
 func (l *Live) Subscribe(client string, topics map[string]bool) (*liveSub, error) {
@@ -130,8 +156,22 @@ func (l *Live) publish(topic string, v any) {
 func (l *Live) loop() {
 	t := time.NewTicker(l.tick)
 	defer t.Stop()
+	burst := time.NewTimer(time.Hour)
+	burst.Stop()
+	defer burst.Stop()
+	step := -1 // posição na rajada depois de um Kick; -1 = sem rajada
 	var prev *MediaState
 	var prevAt time.Time
+	// Lê o player e publica se mudou; diz se publicou.
+	readMedia := func() bool {
+		cur, now := l.media(), time.Now()
+		if prev != nil && !mediaChanged(*prev, cur, now.Sub(prevAt)) {
+			return false
+		}
+		l.publish("media", cur)
+		prev, prevAt = &cur, now
+		return true
+	}
 	for n := 0; ; n++ {
 		w := l.wanted()
 		if len(w) == 0 {
@@ -141,15 +181,32 @@ func (l *Live) loop() {
 			l.publish("stats", l.stats())
 		}
 		if w["media"] {
-			cur, now := l.media(), time.Now()
-			if prev == nil || mediaChanged(*prev, cur, now.Sub(prevAt)) {
-				l.publish("media", cur)
-				prev, prevAt = &cur, now
-			}
+			readMedia()
 		} else {
 			prev = nil
 		}
-		<-t.C
+	wait:
+		for {
+			select {
+			case <-t.C:
+				break wait
+			case <-l.kick:
+				if w["media"] && len(l.burst) > 0 {
+					step = 0
+					burst.Reset(l.burst[0])
+				}
+			case <-burst.C:
+				if step < 0 {
+					continue
+				}
+				changed := readMedia()
+				if step++; changed || step >= len(l.burst) {
+					step = -1 // a mudança chegou (ou desistiu): volta ao ritmo normal
+					continue
+				}
+				burst.Reset(l.burst[step] - l.burst[step-1])
+			}
+		}
 	}
 }
 

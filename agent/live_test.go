@@ -169,3 +169,69 @@ func TestLiveFeedOverHTTP(t *testing.T) {
 		t.Fatal("evento de mídia não chegou")
 	}
 }
+
+// slowLive só tiquetaqueia de hora em hora: qualquer leitura extra vem do Kick.
+func slowLive() (*Live, *atomic.Int32, func(MediaState)) {
+	var reads, inflight, maxInflight atomic.Int32
+	var mu sync.Mutex
+	cur := MediaState{Status: "playing", Title: "a"}
+	l := newLive(func() any { return nil }, func() MediaState {
+		if n := inflight.Add(1); n > maxInflight.Load() {
+			maxInflight.Store(n)
+		}
+		defer inflight.Add(-1)
+		reads.Add(1)
+		time.Sleep(2 * time.Millisecond)
+		mu.Lock()
+		defer mu.Unlock()
+		return cur
+	})
+	l.tick = time.Hour
+	l.burst = []time.Duration{5 * time.Millisecond, 15 * time.Millisecond, 30 * time.Millisecond, 50 * time.Millisecond}
+	return l, &reads, func(m MediaState) {
+		if maxInflight.Load() > 1 {
+			panic("leituras do player em paralelo")
+		}
+		mu.Lock()
+		cur = m
+		mu.Unlock()
+	}
+}
+
+func TestKickSendsNewTrackBeforeNextTick(t *testing.T) {
+	l, _, setMedia := slowLive()
+	sub, _ := l.Subscribe("cel", map[string]bool{"media": true})
+	defer l.Unsubscribe(sub)
+	recv(t, sub, time.Second) // estado inicial
+	setMedia(MediaState{Status: "playing", Title: "b"})
+	l.Kick()
+	m, ok := recv(t, sub, 500*time.Millisecond)
+	if !ok || !strings.Contains(string(m.data), `"title":"b"`) {
+		t.Fatalf("a faixa nova só viria no próximo tique (1 h): %s", m.data)
+	}
+}
+
+func TestKickStopsAfterChangeAndIsBounded(t *testing.T) {
+	l, reads, setMedia := slowLive()
+	sub, _ := l.Subscribe("cel", map[string]bool{"media": true})
+	defer l.Unsubscribe(sub)
+	recv(t, sub, time.Second)
+	base := reads.Load()
+	for range 5 { // toques seguidos viram uma rajada só
+		l.Kick()
+	}
+	time.Sleep(150 * time.Millisecond)
+	if got := reads.Load() - base; got < 1 || got > int32(len(l.burst)) {
+		t.Fatalf("rajada sem mudança leu %d vezes (esperado 1..%d)", got, len(l.burst))
+	}
+	setMedia(MediaState{Status: "playing", Title: "c"}) // confere que nada rodou em paralelo
+}
+
+func TestKickWithoutSubscribersDoesNothing(t *testing.T) {
+	l, reads, _ := slowLive()
+	l.Kick()
+	time.Sleep(80 * time.Millisecond)
+	if reads.Load() != 0 {
+		t.Fatal("leu o player sem ninguém olhando")
+	}
+}

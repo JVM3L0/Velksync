@@ -81,6 +81,7 @@ func (s *Server) mediaCommand(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, err.Error())
 		return
 	}
+	s.live.Kick() // quem está na aba de mídia vê a mudança já
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -97,6 +98,7 @@ func (s *Server) mediaSeek(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, err.Error())
 		return
 	}
+	s.live.Kick() // quem está na aba de mídia vê a mudança já
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
