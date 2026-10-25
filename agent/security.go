@@ -90,6 +90,7 @@ func spkiPin(cert *x509.Certificate) string {
 // pelos comandos locais (send, pair, revoke) para falar com o próprio agente.
 func pinnedTLS(pin string) *tls.Config {
 	return &tls.Config{
+		MinVersion:         tls.VersionTLS13,
 		InsecureSkipVerify: true, // a verificação real é o pin abaixo
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 || spkiPin(cs.PeerCertificates[0]) != pin {

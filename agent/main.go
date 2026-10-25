@@ -146,12 +146,7 @@ func run(configPath, logPath string) error {
 	srv := &Server{cfg: cfg, configPath: configPath, hub: NewHub()}
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("velksync-agent %s ouvindo em https://%s (terminal livre: %v, pin %s)", version, addr, cfg.AllowShell, shortPin(pin))
-	hs := &http.Server{
-		Addr:              addr,
-		Handler:           srv.routes(),
-		ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12},
-	}
+	hs := newHTTPServer(addr, srv.routes(), cert)
 	return hs.ListenAndServeTLS("", "")
 }
 
@@ -270,4 +265,20 @@ func revokeCmd(configPath string, args []string) error {
 	}
 	fmt.Printf("Revogado: %s\nNo dual boot, rode o mesmo comando no outro sistema.\n", strings.Join(out.Revoked, ", "))
 	return nil
+}
+
+// newHTTPServer não tem WriteTimeout: o SSE e os comandos longos (até
+// CommandTimeout) ficariam cortados. Leitura, cabeçalhos e conexões ociosas
+// têm limite para que um cliente lento (slowloris) não segure o agente.
+// Só TLS 1.3: os dois lados são nossos, então não há legado a atender.
+func newHTTPServer(addr string, h http.Handler, cert tls.Certificate) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    16 << 10,
+		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13},
+	}
 }
