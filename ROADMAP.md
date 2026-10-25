@@ -51,7 +51,7 @@ mais antigas (poucos MB no total).
 pede a capa ao PC (o PC falso conta os pedidos); capa vazia ou inválida não
 entra. Manual: próxima/anterior repetidos sem piscar a capa padrão.
 
-## 3. Widget na tela inicial (Android)
+## 3. ~~Widget na tela inicial (Android)~~ feito (com confirmação; desligar passa pelo app)
 
 **Mudança.** `WakeWidgetProvider.kt` + layout, lendo as mesmas preferências do
 atalho da Central de Controle (`flutter.devices`, `flutter.tile_device`).
@@ -78,7 +78,7 @@ Sessão de mídia do Android com capa, título, pausar e pular. Decidir antes:
 - **A (recomendada):** só com o app aberto ou minimizado há pouco; some após 5 min.
 - **B:** sempre, com serviço em primeiro plano e conexão aberta (mais bateria).
 
-## 5. Fechar a v0.4.0
+## 5. ~~Fechar a v0.4.0~~ feito (falta só a tag, junto com a publicação)
 
 - README: presença antes do login, agendamento, canal ao vivo, temas suaves,
   novo player, gráficos, atalho e widget; instalação no Windows e no Linux;
