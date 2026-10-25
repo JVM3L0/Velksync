@@ -9,11 +9,15 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 - Aviso na aba Controle quando app e agente estão em versões diferentes, com
   o passo a passo de atualização do sistema daquele PC.
 - CI a cada envio (testes, análise e formatação) e Dependabot semanal.
+- Tema **Velksync** (gelo e marinho do ícone) e abertura do app com a marca.
+- Licença GPL-3.0.
 
 ### Alterado
 - Release publica um APK por processador (~25 MB em vez de ~72 MB).
 - O app de desenvolvimento é o "Velksync Dev" (`com.velksync.velksync.debug`)
   e convive com o da release.
+- Cor reserva do app e do widget (sem Material You) passa de roxo para o gelo
+  do ícone.
 
 ## [0.4.0] - 2026-10-25
 
