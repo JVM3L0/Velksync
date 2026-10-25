@@ -66,10 +66,8 @@ void main() {
             data: MediaQueryData(size: const Size(320, 640), textScaler: TextScaler.linear(textScale)),
             child: Scaffold(
               body: Builder(
-                builder: (context) => TextButton(
-                  onPressed: () => showStatsSheet(context, h, Metric.cpu),
-                  child: const Text('abrir'),
-                ),
+                builder: (context) =>
+                    TextButton(onPressed: () => showStatsSheet(context, h, Metric.cpu), child: const Text('abrir')),
               ),
             ),
           ),

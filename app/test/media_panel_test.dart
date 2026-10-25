@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -47,7 +48,67 @@ class FakePc extends AgentClient {
   }
 }
 
+/// PC com capa de verdade (uma por faixa) que conta quantas vezes a capa foi pedida.
+class ArtPc extends FakePc {
+  int artRequests = 0;
+  static final _png = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  );
+
+  @override
+  Future<MediaState> media() async => MediaState.fromJson({
+    'available': true,
+    'status': 'playing',
+    'title': title,
+    'artist': 'Linkin Park',
+    'art_id': 'art-$title',
+    'can_control': true,
+    'duration_ms': 180000,
+  });
+
+  @override
+  Future<Uint8List?> mediaArt() async {
+    artRequests++;
+    return _png;
+  }
+
+  @override
+  Future<void> mediaCommand(String action) async {
+    sent.add(action);
+    title = action == 'next' ? 'Faint' : 'Numb';
+  }
+}
+
 void main() {
+  testWidgets('voltar a uma faixa não baixa a capa de novo', (tester) async {
+    final pc = ArtPc();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MediaPanel(client: pc)),
+      ),
+    );
+    Future<void> settle() async {
+      // Decodificar a imagem e tirar as cores roda fora do relógio falso.
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+    }
+
+    await settle();
+    expect(find.text('Numb'), findsOneWidget);
+    expect(pc.artRequests, 1);
+    await tester.tap(find.byTooltip('Próxima'));
+    await settle();
+    expect(find.text('Faint'), findsOneWidget);
+    expect(pc.artRequests, 2);
+    await tester.tap(find.byTooltip('Anterior'));
+    await settle();
+    expect(find.text('Numb'), findsOneWidget);
+    expect(pc.artRequests, 2, reason: 'a capa de "Numb" veio do cache');
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('arrastar a capa para a esquerda pula para a próxima', (tester) async {
     final pc = FakePc();
     await tester.pumpWidget(

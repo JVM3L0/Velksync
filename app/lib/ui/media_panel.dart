@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/device.dart';
 import '../services/agent_client.dart';
+import '../services/lru_cache.dart';
 import '../services/media_smoother.dart';
 import 'perf.dart';
 import 'marquee.dart';
@@ -43,6 +44,10 @@ class _MediaPanelState extends State<MediaPanel> {
 
   /// Quanto a troca espera pela capa nova; se demorar, ela entra depois.
   static const _artWait = Duration(milliseconds: 600);
+
+  /// Últimas capas já baixadas e analisadas, por PC e capa: voltar a uma
+  /// faixa mostra a capa na hora. Só na memória, alguns MB no máximo.
+  static final _artCache = LruCache<String, _Art>(20);
 
   MediaState? _state;
   Uint8List? _art;
@@ -198,11 +203,16 @@ class _MediaPanelState extends State<MediaPanel> {
 
   Future<_Art?> _loadArt(MediaState st) async {
     if (st.artId.isEmpty) return null;
+    final key = '${_c.device.id}|${st.artId}';
+    if (_artCache.get(key) case final hit?) return hit;
     try {
       final bytes = await _c.mediaArt().timeout(const Duration(seconds: 3), onTimeout: () => null);
       if (bytes == null) return null;
       final look = await _analyzeArt(bytes);
-      return (bytes: bytes, aspect: look?.aspect ?? 1, schemes: look?.schemes);
+      if (look == null) return (bytes: bytes, aspect: 1.0, schemes: null); // não decodifica: não guarda
+      final art = (bytes: bytes, aspect: look.aspect, schemes: look.schemes);
+      _artCache.put(key, art);
+      return art;
     } on AgentException {
       return null;
     }
