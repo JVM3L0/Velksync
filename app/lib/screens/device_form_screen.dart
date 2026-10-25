@@ -66,7 +66,10 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
     try {
       if (Platform.isAndroid) {
         final a = await DeviceInfoPlugin().androidInfo;
-        return '${a.manufacturer} ${a.model}';
+        // Alguns fabricantes já põem a marca no modelo ("motorola edge 70").
+        return a.model.toLowerCase().startsWith(a.manufacturer.toLowerCase())
+            ? a.model
+            : '${a.manufacturer} ${a.model}';
       }
     } catch (_) {}
     return 'celular';
