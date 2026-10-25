@@ -26,6 +26,7 @@ type Server struct {
 	pairs      *Pairings
 	limiter    *Limiter
 	live       *Live
+	schedule   *Scheduler
 	mu         sync.Mutex // protege cfg.Devices e cfg.Revoked
 }
 
@@ -38,6 +39,11 @@ func (s *Server) routes() http.Handler {
 	}
 	if s.live == nil {
 		s.live = newLive(currentStats, currentMedia)
+	}
+	if s.schedule == nil {
+		s.schedule = newScheduler(runPower, func(text string) {
+			s.hub.Publish(Event{Type: "notify", Text: text})
+		}, currentMedia)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/pair/start", masterOnly(s.pairStart))
@@ -53,6 +59,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/media/volume", s.mediaVolume)
 	mux.HandleFunc("POST /api/media/{action}", s.mediaCommand)
 	mux.HandleFunc("POST /api/power", s.power)
+	mux.HandleFunc("DELETE /api/power/schedule", s.cancelSchedule)
 	mux.HandleFunc("GET /api/commands", s.listCommands)
 	mux.HandleFunc("POST /api/commands/{id}", s.runCommand)
 	mux.HandleFunc("POST /api/shell", s.shell)
@@ -127,16 +134,24 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"mac":         macFor(addrIP(local), false),
 		"allow_shell": s.cfg.AllowShell,
 		// O app usa o que existir aqui e cai no comportamento antigo no resto.
-		"features": []string{"live", "presence"},
+		"features": []string{"live", "presence", "schedule"},
+		"schedule": s.schedule.Current(),
 	})
 }
 
 func (s *Server) power(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Action string `json:"action"`
+		// Opcionais: agendam em vez de executar agora.
+		DelayS int    `json:"delay_s"`
+		When   string `json:"when"` // "media_stopped"
 	}
 	if err := decode(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	if req.DelayS != 0 || req.When != "" {
+		s.schedulePower(w, r, req.Action, req.DelayS, req.When)
 		return
 	}
 	cmd, err := powerCommand(req.Action)
