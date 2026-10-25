@@ -16,6 +16,20 @@ import (
 
 const testNonce = "00112233445566778899aabbccddeeff"
 
+// Vetor fixo do protocolo: o mesmo valor é conferido nos testes do app, então
+// mudar a derivação ou a prova de um lado só quebra os dois.
+const (
+	vectorSecret = "120d7cc7d299ac345c70dfb3195c33ab097e96c84334a88b894f08e6a0cafaa9"
+	vectorProof  = "3c090eea3b8640c738fe38f842e98be8b0304923be5e015147caaac3049fd3b2"
+)
+
+func TestPresenceVector(t *testing.T) {
+	s := presenceSecret(testMaster)
+	if hex.EncodeToString(s) != vectorSecret || presenceProof(s, testNonce, "windows") != vectorProof {
+		t.Fatal("o protocolo de presença mudou: atualize o vetor aqui e em app/test/presence_test.dart")
+	}
+}
+
 func TestPresenceProof(t *testing.T) {
 	secret := presenceSecret(testMaster)
 	if hex.EncodeToString(secret) == testMaster || len(secret) != 32 {

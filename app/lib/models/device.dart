@@ -14,6 +14,11 @@ class Device {
   final String deviceId;
   final String token;
 
+  /// Segredo que o agente entrega depois de autenticado; serve só para
+  /// conferir o sinal de presença antes do login. Também fica no
+  /// armazenamento seguro.
+  final String presenceKey;
+
   const Device({
     required this.id,
     required this.name,
@@ -24,6 +29,7 @@ class Device {
     this.pin = '',
     this.deviceId = '',
     this.token = '',
+    this.presenceKey = '',
   });
 
   /// Sem pareamento só dá para ligar (Wake-on-LAN não precisa de credencial).
@@ -42,6 +48,7 @@ class Device {
     String? pin,
     String? deviceId,
     String? token,
+    String? presenceKey,
   }) => Device(
     id: id,
     name: name ?? this.name,
@@ -52,6 +59,7 @@ class Device {
     pin: pin ?? this.pin,
     deviceId: deviceId ?? this.deviceId,
     token: token ?? this.token,
+    presenceKey: presenceKey ?? this.presenceKey,
   );
 
   Map<String, dynamic> toJson() => {
@@ -65,7 +73,7 @@ class Device {
     'device_id': deviceId,
   };
 
-  factory Device.fromJson(Map<String, dynamic> j, {String token = ''}) => Device(
+  factory Device.fromJson(Map<String, dynamic> j, {String token = '', String presenceKey = ''}) => Device(
     id: j['id'] as String,
     name: j['name'] as String,
     host: j['host'] as String,
@@ -75,6 +83,7 @@ class Device {
     pin: j['pin'] as String? ?? '',
     deviceId: j['device_id'] as String? ?? '',
     token: token,
+    presenceKey: presenceKey,
   );
 }
 
@@ -92,11 +101,7 @@ class AgentInfo {
       mac = j['mac'] as String? ?? '',
       allowShell = j['allow_shell'] as bool? ?? false;
 
-  String get osLabel => switch (os) {
-    'windows' => 'Windows',
-    'linux' => 'Linux',
-    _ => os,
-  };
+  String get osLabel => osLabelOf(os);
 }
 
 class PresetCommand {
@@ -202,3 +207,9 @@ class MediaState {
 
   bool get playing => status == 'playing';
 }
+
+String osLabelOf(String os) => switch (os) {
+  'windows' => 'Windows',
+  'linux' => 'Linux',
+  _ => os,
+};

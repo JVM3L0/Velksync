@@ -81,6 +81,14 @@ class AgentClient {
   Future<AgentInfo> info() async =>
       AgentInfo.fromJson(await _send('GET', '/api/info', timeout: const Duration(seconds: 3)) as Map<String, dynamic>);
 
+  /// Segredo do sinal de presença (agentes a partir da v0.3).
+  Future<String> presenceKey() async {
+    final data = await _send('GET', '/api/presence', timeout: const Duration(seconds: 3));
+    final secret = data is Map ? data['secret'] : null;
+    if (secret is! String || secret.isEmpty) throw AgentException('Resposta inválida do PC');
+    return secret;
+  }
+
   Future<PcStats> stats() async =>
       PcStats.fromJson(await _send('GET', '/api/stats', timeout: const Duration(seconds: 3)) as Map<String, dynamic>);
 

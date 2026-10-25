@@ -12,6 +12,7 @@ class DeviceStore {
   static const _secure = FlutterSecureStorage();
 
   static String _tokenKey(String id) => 'token_$id';
+  static String _presenceKey(String id) => 'presence_$id';
 
   Future<List<Device>> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -26,7 +27,13 @@ class DeviceStore {
       // e o PC passa a aparecer como "não pareado" (ligar continua funcionando).
       if (j.remove('token') != null) migrated = true;
       final id = j['id'] as String;
-      devices.add(Device.fromJson(j, token: await _secure.read(key: _tokenKey(id)) ?? ''));
+      devices.add(
+        Device.fromJson(
+          j,
+          token: await _secure.read(key: _tokenKey(id)) ?? '',
+          presenceKey: await _secure.read(key: _presenceKey(id)) ?? '',
+        ),
+      );
     }
     if (migrated) await save(devices);
     return devices;
@@ -36,13 +43,16 @@ class DeviceStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, jsonEncode([for (final d in devices) d.toJson()]));
     for (final d in devices) {
-      if (d.token.isEmpty) {
-        await _secure.delete(key: _tokenKey(d.id));
-      } else {
-        await _secure.write(key: _tokenKey(d.id), value: d.token);
-      }
+      await _put(_tokenKey(d.id), d.token);
+      await _put(_presenceKey(d.id), d.presenceKey);
     }
   }
 
-  Future<void> forget(Device d) => _secure.delete(key: _tokenKey(d.id));
+  Future<void> _put(String key, String value) =>
+      value.isEmpty ? _secure.delete(key: key) : _secure.write(key: key, value: value);
+
+  Future<void> forget(Device d) async {
+    await _secure.delete(key: _tokenKey(d.id));
+    await _secure.delete(key: _presenceKey(d.id));
+  }
 }
