@@ -41,6 +41,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/devices", masterOnly(s.listDevices))
 	mux.HandleFunc("POST /api/devices/revoke", masterOnly(s.revokeDevice))
 	mux.HandleFunc("GET /api/info", s.info)
+	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("POST /api/power", s.power)
 	mux.HandleFunc("GET /api/commands", s.listCommands)
 	mux.HandleFunc("POST /api/commands/{id}", s.runCommand)
