@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device.dart';
 import '../services/agent_client.dart';
 import '../services/pc_probe.dart';
 import '../services/stats_history.dart';
+import '../services/versions.dart';
 import '../services/wake_tracker.dart';
 import '../ui/media_panel.dart';
 import '../ui/perf.dart';
@@ -14,6 +16,7 @@ import '../ui/schedule.dart';
 import '../ui/stats_chart.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
+import '../ui/update_notice.dart';
 import '../ui/wake_help.dart';
 import '../ui/widgets.dart';
 import 'terminal_screen.dart';
@@ -46,12 +49,17 @@ class _DeviceScreenState extends State<DeviceScreen> {
   Timer? _statsPoll;
   StreamSubscription<PcStats>? _liveStats; // agente com "live": ele empurra os stats
   late bool _pendingShutdown = widget.confirmShutdown;
+  String? _dismissedVersion; // "Agora não" vale até a versão do agente mudar
+  String get _dismissKey => 'update_dismissed_${widget.device.id}';
 
   @override
   void initState() {
     super.initState();
     _wakes.addListener(_onWake);
     if (!widget.device.paired) return; // sem credencial: só dá para ligar
+    SharedPreferences.getInstance().then((p) {
+      if (mounted) setState(() => _dismissedVersion = p.getString(_dismissKey));
+    });
     _refresh();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
     // Desempenho só enquanto esta tela está aberta e o PC responde (em
@@ -295,6 +303,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           _hero(status),
+          ?_updateNotice(),
           ..._energy(d, status, online, scheme),
           AnimatedSize(
             duration: Motion.spatialDuration,
@@ -398,6 +407,25 @@ class _DeviceScreenState extends State<DeviceScreen> {
         },
       ),
     ];
+  }
+
+  /// Aviso de versão: só com o PC respondendo e se não foi dispensado para
+  /// esta versão do agente.
+  Widget? _updateNotice() {
+    final info = _info;
+    if (info == null) return null;
+    final gap = versionGap(agent: info.version);
+    if (gap == VersionGap.none || _dismissedVersion == info.version) return null;
+    return UpdateBanner(
+      gap: gap,
+      agentVersion: info.version,
+      appVersion: appVersion,
+      onDismiss: () async {
+        setState(() => _dismissedVersion = info.version);
+        await (await SharedPreferences.getInstance()).setString(_dismissKey, info.version);
+      },
+      onHowTo: () => showUpdateSheet(context, gap: gap, os: info.os),
+    );
   }
 
   Widget _performanceTab() {

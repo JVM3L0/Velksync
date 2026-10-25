@@ -94,6 +94,9 @@ class AgentInfo {
   final String mac;
   final bool allowShell;
 
+  /// Versão do agente ("0.4.0"); vazia em agentes muito antigos.
+  final String version;
+
   /// O que este agente sabe fazer além do básico (ex.: "live", "presence").
   final Set<String> features;
 
@@ -108,6 +111,7 @@ class AgentInfo {
       os = j['os'] as String? ?? '',
       mac = j['mac'] as String? ?? '',
       allowShell = j['allow_shell'] as bool? ?? false,
+      version = j['version'] as String? ?? '',
       features = {for (final f in j['features'] as List? ?? const []) f.toString()},
       schedule = j['schedule'] is Map ? PowerSchedule.fromJson(j['schedule'] as Map<String, dynamic>) : null;
 
