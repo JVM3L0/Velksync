@@ -4,7 +4,7 @@ Liga, desliga e roda comandos no PC (Windows e Linux, dual boot) pelo celular, n
 
 ```
 celular (app Flutter)  ── Wake-on-LAN (UDP 9) ──────────▶  placa de rede do PC desligado
-                       ── HTTP + token (TCP 41100) ─────▶  velksync-agent (desligar, comandos, terminal)
+                       ── HTTPS com pin (TCP 41100) ────▶  velksync-agent (desligar, comandos, terminal)
                        ◀─ eventos SSE (/api/events) ────   velksync-agent send ...
                        ── descoberta (UDP 41101) ───────▶
 ```
@@ -25,13 +25,13 @@ celular (app Flutter)  ── Wake-on-LAN (UDP 9) ──────────
 
 ## 2. Instalar o agente
 
-Compile (precisa de Go 1.22+; dá para compilar os dois no WSL/Linux):
+Compile (precisa de Go 1.25+; dá para compilar os dois no WSL/Linux):
 
 ```sh
 cd agent && ./build.sh      # gera agent/dist/linux e agent/dist/windows
 ```
 
-**Use o mesmo token nos dois sistemas.** Instale primeiro em um, copie o token exibido e passe-o ao instalar no outro.
+**Use o mesmo token mestre nos dois sistemas.** Instale primeiro em um, copie o token exibido e passe-o ao instalar no outro. Dele derivam o certificado HTTPS e as credenciais dos celulares, então os dois sistemas do dual boot são o mesmo PC para o app.
 
 **Linux** (serviço systemd do usuário):
 ```sh
@@ -43,7 +43,7 @@ cd agent/dist/linux && ./install-linux.sh            # ou: ./install-linux.sh <t
 cd agent\dist\windows
 powershell -ExecutionPolicy Bypass -File install-windows.ps1 -Token <token-do-linux>
 ```
-A rede do Windows precisa estar como **Privada** (as regras de firewall valem só para ela).
+A rede do Windows precisa estar como **Privada**: as regras de firewall valem só para ela e só para a sub-rede local. No Linux, o instalador libera as portas no `ufw` também só para a sub-rede local.
 
 > **WSL com `networkingMode=mirrored`**: o WSL reserva no Windows a faixa de portas efêmeras do Linux (`cat /proc/sys/net/ipv4/ip_local_port_range`, ex.: 44620–48715). Se o agente do Windows falhar com "Only one usage of each socket address", a porta caiu nessa faixa: troque `port` na config.
 
@@ -68,7 +68,8 @@ Reinicie o agente depois de editar a config.
 ```
 
 - `commands`: aparecem como botões no app. Um comando sem variante para o SO atual fica escondido.
-- `allow_shell: true`: libera o **terminal livre** no app. Quem tiver o token roda qualquer coisa como seu usuário. No Windows os comandos rodam via `cmd.exe`; no Linux, via `/bin/sh`.
+- `allow_shell: true`: libera o **terminal livre** no app. Qualquer celular pareado roda qualquer coisa como seu usuário; deixe desligado se não usar. No Windows os comandos rodam via `cmd.exe`; no Linux, via `/bin/sh`.
+- `devices` / `revoked`: mantidos pelo agente (celulares pareados e revogados). Não edite à mão.
 - Logs: `journalctl --user -u velksync-agent -f` no Linux; `agent.log` ao lado da config no Windows.
 
 ## 3. PC → celular
@@ -93,18 +94,40 @@ flutter run          # com o celular conectado (depuração USB ou sem fio)
 flutter build apk    # APK de release em build/app/outputs/flutter-apk/
 ```
 
-No app, em **Adicionar PC**:
-- **Escanear QR do PC** (mais fácil): com o agente rodando, execute `velksync-agent pair` no PC e aponte a câmera. No Linux o QR aparece no terminal; no Windows abre como imagem. O QR não leva o token, e sim um código de uso único que vale 5 minutos: o app troca esse código pelo token, e o `pair` percebe a leitura e apaga a imagem sozinho (também apaga se expirar ou com Ctrl+C).
-- Ou toque num PC encontrado na busca e cole o token (`velksync-agent token`).
+No app, em **Adicionar PC → Escanear QR do PC**: com o agente rodando, execute `velksync-agent pair` no PC e aponte a câmera. No Linux o QR aparece no terminal; no Windows abre como imagem. O QR leva o pin do certificado do PC e um código de uso único (5 minutos), trocado por uma credencial só deste celular. O `pair` percebe a leitura e apaga a imagem sozinho (também apaga se expirar ou com Ctrl+C).
+
+Sem o QR dá para cadastrar um PC só com IP e MAC: ele fica "não pareado" e serve apenas para ligar. Para controlar, edite o PC e escaneie o QR.
+
+Celulares pareados:
+```sh
+velksync-agent devices                 # lista os celulares pareados e revogados
+velksync-agent revoke "motorola edge"  # revoga por nome ou id (no dual boot, nos dois sistemas)
+velksync-agent fingerprint             # pin do certificado; confira com o mostrado no app
+```
 
 Use um **celular de verdade no mesmo Wi-Fi**. O emulador Android fica atrás de NAT, então broadcast (WoL e descoberta) não chega na sua rede.
 
-**iOS**: HTTP para o agente funciona. Já broadcast UDP (WoL e descoberta) exige o entitlement `com.apple.developer.networking.multicast`, que a Apple precisa aprovar. Até lá, cadastre o IP manualmente; o botão Ligar não vai funcionar.
+**iOS**: a conexão com o agente funciona. Já broadcast UDP (WoL e descoberta) exige o entitlement `com.apple.developer.networking.multicast`, que a Apple precisa aprovar. Até lá, cadastre o IP manualmente; o botão Ligar não vai funcionar.
 
 ## Segurança
 
-- Tudo é HTTP sem TLS dentro da LAN. O token (256 bits) protege as chamadas, mas alguém na mesma rede capturando tráfego consegue lê-lo. Não exponha a porta 41100 na internet. Para acesso remoto, use Tailscale/WireGuard.
-- No celular, o token fica no `shared_preferences`. Um próximo passo seria trocar por `flutter_secure_storage`.
+| Camada | Como |
+|---|---|
+| Canal | HTTPS (TLS 1.2+) com o certificado do PC fixado no app pelo hash da chave pública, que vem no QR. Sem o pin certo o app não conversa; um impostor na rede não consegue se passar pelo PC. |
+| Credenciais | Cada celular recebe `id:token` próprio (HMAC do token mestre), revogável com `velksync-agent revoke`. O token mestre só é aceito vindo do próprio PC (localhost) e nunca sai dele. |
+| Pareamento | Código de uso único, 128 bits, válido por 5 minutos, que nunca circula sem TLS. |
+| Força bruta | 10 falhas de autenticação em 1 minuto bloqueiam o IP por 5 minutos. |
+| Rede | Firewall liberado só para a sub-rede local (Windows: rede privada; Linux: `ufw`). |
+| Celular | Credenciais no Android Keystore (`flutter_secure_storage`), backup e transferência entre aparelhos desligados, sem HTTP em texto puro. |
+| Padrões | Terminal livre desligado por padrão; comandos com tempo limite e saída limitada. |
+
+Testes das regras de segurança: `cd agent && go test ./...` e `cd app && flutter test`.
+
+Não exponha a porta 41100 na internet. Para acesso de fora de casa, use uma VPN (Tailscale/WireGuard).
+
+### Atualizando da v0.1
+
+A v0.2 troca HTTP por HTTPS e o token único por credenciais por celular. Atualize o agente nos dois sistemas e o app; os PCs já cadastrados aparecem como "não pareados" (ligar continua funcionando) até você editar cada um e escanear o QR de novo.
 
 ## Próximos passos possíveis
 
