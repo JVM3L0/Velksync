@@ -199,3 +199,9 @@ A v0.2 troca HTTP por HTTPS e o token único por credenciais por celular. Atuali
 - Ligar o PC fora de casa: dispositivo sempre ligado na LAN (Raspberry Pi/roteador) + Tailscale.
 - Notificações reais (`flutter_local_notifications`) e recebimento em segundo plano.
 - Controles de mídia na notificação e na tela de bloqueio (ver `ROADMAP.md`).
+
+## Licença
+
+[GPL-3.0](LICENSE): você pode usar, estudar, modificar e redistribuir, inclusive comercialmente, desde que versões modificadas distribuídas também sejam GPL-3.0 com o código-fonte disponível.
+
+Exceção: `.claude/skills/mobile-app-ui-design/` é adaptada de [ceorkm/mobile-app-ui-design](https://github.com/ceorkm/mobile-app-ui-design), sob MIT (compatível com a GPL-3.0).
