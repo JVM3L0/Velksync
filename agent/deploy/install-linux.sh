@@ -9,5 +9,12 @@ install -m 644 velksync-agent.service ~/.config/systemd/user/
 [ -f ~/.config/velksync/config.json ] || ~/.local/bin/velksync-agent init ${1:+-token "$1"}
 systemctl --user daemon-reload
 systemctl --user enable --now velksync-agent
-command -v ufw >/dev/null && sudo ufw allow 41100/tcp && sudo ufw allow 41101/udp || true
-echo "Token: $(~/.local/bin/velksync-agent token)"
+# Firewall: libera as portas só para a sub-rede local (ex.: 192.168.3.0/24).
+LAN=$(ip -4 route show proto kernel scope link | awk '!/docker|br-|virbr/ {print $1; exit}')
+if command -v ufw >/dev/null && [ -n "$LAN" ]; then
+  sudo ufw allow from "$LAN" to any port 41100 proto tcp
+  sudo ufw allow from "$LAN" to any port 41101 proto udp
+fi
+echo "Token mestre (use só para instalar no outro sistema do dual boot; não compartilhe):"
+echo "  $(~/.local/bin/velksync-agent token)"
+echo "Para parear um celular: velksync-agent pair"

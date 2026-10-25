@@ -17,7 +17,8 @@ if (-not (Test-Path $cfg)) {
 
 foreach ($r in @(@{n="Velksync TCP"; p="TCP"; port=41100}, @{n="Velksync UDP"; p="UDP"; port=41101})) {
     Remove-NetFirewallRule -DisplayName $r.n -ErrorAction SilentlyContinue
-    New-NetFirewallRule -DisplayName $r.n -Direction Inbound -Protocol $r.p -LocalPort $r.port -Program $exe -Profile Private -Action Allow | Out-Null
+    # Só redes privadas e só a sub-rede local: nada de fora da sua LAN alcança o agente.
+    New-NetFirewallRule -DisplayName $r.n -Direction Inbound -Protocol $r.p -LocalPort $r.port -Program $exe -Profile Private -RemoteAddress LocalSubnet -Action Allow | Out-Null
 }
 
 $action = New-ScheduledTaskAction -Execute $exe
@@ -28,5 +29,7 @@ Start-ScheduledTask -TaskName "Velksync Agent"
 
 Write-Host "Instalado em $exe"
 # Lido do arquivo: o .exe é GUI e o PowerShell nem sempre captura a saída dele.
-Write-Host "Token: $((Get-Content $cfg -Raw | ConvertFrom-Json).token)"
+Write-Host "Token mestre (use só para instalar no outro sistema do dual boot; não compartilhe):"
+Write-Host "  $((Get-Content $cfg -Raw | ConvertFrom-Json).token)"
+Write-Host "Para parear um celular: & `"$exe`" pair"
 Write-Host "Lembre: a rede do Windows precisa estar como 'Privada' e o Fast Startup desativado para o Wake-on-LAN."
