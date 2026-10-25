@@ -145,6 +145,8 @@ velksync-agent revoke "motorola edge"  # revoga por nome ou id (no dual boot, no
 velksync-agent fingerprint             # pin do certificado; confira com o mostrado no app
 ```
 
+O `flutter run` instala o **Velksync Dev** (`com.velksync.velksync.debug`), que convive com o app da release e tem seus próprios pareamentos.
+
 Use um **celular de verdade no mesmo Wi-Fi**. O emulador Android fica atrás de NAT, então broadcast (WoL e descoberta) não chega na sua rede.
 
 **iOS**: a conexão com o agente funciona. Já broadcast UDP (WoL e descoberta) exige o entitlement `com.apple.developer.networking.multicast`, que a Apple precisa aprovar. Até lá, cadastre o IP manualmente; o botão Ligar não vai funcionar.

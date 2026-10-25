@@ -51,6 +51,12 @@ android {
     }
 
     buildTypes {
+        // O app de desenvolvimento ("Velksync Dev") convive com o da release:
+        // outro id, outros pareamentos, e um `flutter run` nunca esbarra na
+        // assinatura do app instalado pela release.
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
         }
