@@ -11,6 +11,7 @@ class FakePc extends AgentClient {
   FakePc() : super(const Device(id: 'pc', name: 'PC', host: '127.0.0.1'));
 
   String title = 'Numb';
+  bool stuck = false; // o player demora a trocar de faixa
   final sent = <String>[];
 
   @override
@@ -21,6 +22,7 @@ class FakePc extends AgentClient {
     'artist': 'Linkin Park',
     'can_control': true,
     'duration_ms': 180000,
+    'position_ms': 60000,
     'player': 'Helium',
     'volume': volume,
     'muted': false,
@@ -39,6 +41,7 @@ class FakePc extends AgentClient {
   @override
   Future<void> mediaCommand(String action) async {
     sent.add(action);
+    if (stuck) return;
     if (action == 'next') title = 'Faint';
     if (action == 'previous') title = 'In the End';
   }
@@ -65,6 +68,27 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Faint'), findsOneWidget);
     expect(find.text('Numb'), findsNothing);
+  });
+
+  testWidgets('a barra para em 0:00 enquanto a faixa troca', (tester) async {
+    final pc = FakePc()..stuck = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MediaPanel(client: pc)),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('1:00'), findsOneWidget);
+    await tester.tap(find.byTooltip('Próxima'));
+    await tester.pump();
+    expect(find.text('0:00'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('0:00'), findsOneWidget, reason: 'a faixa antiga não segue correndo');
+    pc.stuck = false;
+    pc.title = 'Faint';
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('Faint'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('arrasto curto e lento não pula', (tester) async {

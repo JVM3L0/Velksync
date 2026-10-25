@@ -34,7 +34,16 @@ class MediaPanel extends StatefulWidget {
   State<MediaPanel> createState() => _MediaPanelState();
 }
 
+/// Capa baixada e o que se tirou dela (formato e cores).
+typedef _Art = ({Uint8List bytes, double aspect, (ColorScheme, ColorScheme)? schemes});
+
 class _MediaPanelState extends State<MediaPanel> {
+  /// Duração da troca de faixa (capa e títulos), curta como nos players.
+  static const _switch = Duration(milliseconds: 380);
+
+  /// Quanto a troca espera pela capa nova; se demorar, ela entra depois.
+  static const _artWait = Duration(milliseconds: 600);
+
   MediaState? _state;
   Uint8List? _art;
   String _artId = '';
@@ -44,6 +53,7 @@ class _MediaPanelState extends State<MediaPanel> {
   double? _dragPosition, _dragVolume;
   DateTime _lastVolumeSent = DateTime(0);
   bool _busy = false;
+  int? _frozenAt; // posição parada da barra durante a troca de faixa
   late final _smoother = MediaSmoother(onChange: _shown);
   int _trackIndex = 0; // muda a cada faixa; o sinal diz para que lado desliza
   int _direction = 1; // 1 próxima, -1 anterior
@@ -74,7 +84,7 @@ class _MediaPanelState extends State<MediaPanel> {
     }
     // Avança a barra suavemente entre as leituras.
     _tick = Timer.periodic(const Duration(milliseconds: 250), (_) {
-      if (mounted && (_state?.playing ?? false) && _dragPosition == null) setState(() {});
+      if (mounted && (_state?.playing ?? false) && _dragPosition == null && _frozenAt == null) setState(() {});
     });
   }
 
@@ -131,15 +141,31 @@ class _MediaPanelState extends State<MediaPanel> {
     if (!mounted) return;
     final st = _smoother.shown;
     if (st == null) return;
+    // Durante a troca a barra para (a faixa antiga não segue correndo).
+    if (_smoother.switching) {
+      _frozenAt ??= _livePosition;
+    } else {
+      _frozenAt = null;
+    }
     var art = _art;
-    if (st.artId != _artId) {
-      // A capa nova chega antes de a faixa entrar na tela: assim ela já
-      // desliza com a capa certa, sem trocar de imagem no meio.
-      art = st.artId.isEmpty ? null : await _c.mediaArt().timeout(const Duration(seconds: 3), onTimeout: () => null);
-      final look = art == null ? null : await _analyzeArt(art);
+    var newArt = st.artId != _artId;
+    if (newArt) {
+      // Espera um pouco a capa nova para ela já entrar deslizando; se o PC
+      // demorar, a faixa entra com a capa padrão e a imagem chega depois.
+      final load = _loadArt(st);
+      var late = false;
+      final got = await load.timeout(_artWait, onTimeout: () {
+        late = true;
+        return null;
+      });
       if (!mounted || !identical(_smoother.shown, st)) return; // chegou estado mais novo
-      _artAspect = look?.aspect ?? 1;
-      _artSchemes = look?.schemes;
+      _useArt(got);
+      art = got?.bytes;
+      if (late) {
+        load.then((a) {
+          if (a != null && mounted && _artId == st.artId) setState(() => _useArt(a));
+        });
+      }
     }
     setState(() {
       if (!identical(st, _state)) _stamp = DateTime.now();
@@ -155,7 +181,7 @@ class _MediaPanelState extends State<MediaPanel> {
           _flown = false;
           WidgetsBinding.instance.addPostFrameCallback((_) => _snap = false);
           _unhide?.cancel();
-          _unhide = Timer(const Duration(milliseconds: 700), () {
+          _unhide = Timer(_switch + const Duration(milliseconds: 50), () {
             if (mounted) setState(() => _hideOut = false);
           });
         }
@@ -163,8 +189,26 @@ class _MediaPanelState extends State<MediaPanel> {
       }
       _state = st;
       _artId = st.artId;
-      _art = art;
+      if (newArt) _art = art;
     });
+  }
+
+  Future<_Art?> _loadArt(MediaState st) async {
+    if (st.artId.isEmpty) return null;
+    try {
+      final bytes = await _c.mediaArt().timeout(const Duration(seconds: 3), onTimeout: () => null);
+      if (bytes == null) return null;
+      final look = await _analyzeArt(bytes);
+      return (bytes: bytes, aspect: look?.aspect ?? 1, schemes: look?.schemes);
+    } on AgentException {
+      return null;
+    }
+  }
+
+  void _useArt(_Art? a) {
+    _art = a?.bytes;
+    _artAspect = a?.aspect ?? 1;
+    _artSchemes = a?.schemes;
   }
 
   /// Proporção da capa e esquemas de cor (claro, escuro) tirados dela, no
@@ -176,7 +220,8 @@ class _MediaPanelState extends State<MediaPanel> {
       final aspect = frame.image.width / frame.image.height;
       frame.image.dispose();
       codec.dispose();
-      final provider = MemoryImage(bytes);
+      // As cores saem de uma miniatura: decodificar a capa inteira é lento.
+      final provider = ResizeImage(MemoryImage(bytes), width: 112, height: 112, policy: ResizeImagePolicy.fit);
       final light = await ColorScheme.fromImageProvider(provider: provider);
       final dark = await ColorScheme.fromImageProvider(provider: provider, brightness: Brightness.dark);
       return (aspect: aspect, schemes: (light, dark));
@@ -187,7 +232,9 @@ class _MediaPanelState extends State<MediaPanel> {
 
   static String _trackKey(MediaState s) => s.available ? '${s.title}|${s.artist}|${s.album}' : '';
 
-  int get _position {
+  int get _position => _frozenAt ?? _livePosition;
+
+  int get _livePosition {
     final st = _state;
     if (st == null) return 0;
     var p = st.positionMs;
@@ -225,6 +272,8 @@ class _MediaPanelState extends State<MediaPanel> {
 
   void _skip(String action) {
     _direction = action == 'previous' ? -1 : 1;
+    // Próxima ou anterior, a faixa que entra começa do zero.
+    if (_state?.available ?? false) setState(() => _frozenAt = 0);
     _smoother.expectChange();
     _run(() => _c.mediaCommand(action));
   }
@@ -418,7 +467,7 @@ class _MediaPanelState extends State<MediaPanel> {
       duration: _dragging || _snap
           ? Duration.zero
           : _flown && _dragDx != 0
-          ? const Duration(milliseconds: 240)
+          ? const Duration(milliseconds: 180)
           : Motion.spatialDuration,
       curve: _flown && _dragDx != 0 ? Curves.easeIn : Motion.spatial,
       transformAlignment: Alignment.bottomCenter,
@@ -433,7 +482,7 @@ class _MediaPanelState extends State<MediaPanel> {
       child: SharedAxisSwitcher(
         index: _trackIndex,
         distance: width * 0.9,
-        duration: const Duration(milliseconds: 650),
+        duration: _switch,
         hideOutgoing: _hideOut,
         child: MediaCover(
           art: st.available ? _art : null,
@@ -500,7 +549,7 @@ class _MediaPanelState extends State<MediaPanel> {
     final info = SharedAxisSwitcher(
       index: _trackIndex,
       distance: 96,
-      duration: const Duration(milliseconds: 650),
+      duration: _switch,
       child: SizedBox(
         width: double.infinity,
         child: Column(
