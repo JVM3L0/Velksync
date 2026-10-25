@@ -92,7 +92,16 @@ O painel do PC no app mostra CPU, GPU, memória e disco em tempo real (atualiza 
 - **Windows**: APIs nativas (as mesmas do Gerenciador de Tarefas). O Windows não expõe temperaturas sem driver de terceiros, então elas não aparecem.
 - **Linux**: `/proc` e `/sys`; GPU AMD pelo driver `amdgpu` e temperatura da CPU pelo `k10temp`/`coretemp`.
 
-## 5. Rodar o app
+## 5. Mídia
+
+A aba **Mídia** mostra o que está tocando no PC (capa, título, artista, posição) e controla play/pause, anterior, próxima, posição e o volume do PC. Funciona com qualquer player que se integre ao sistema: Spotify, navegadores, VLC etc.
+
+- **Windows**: controles de mídia do sistema (o painel de mídia do Windows) e Core Audio para o volume. Um auxiliar do PowerShell embutido no agente é iniciado sob demanda, oculto, e se encerra após 2 minutos sem uso.
+- **Linux**: MPRIS via D-Bus; volume pelo `wpctl` (PipeWire) ou `pactl` (PulseAudio).
+
+A capa só é entregue se o arquivo for de fato uma imagem, e só vem de `file://` ou `https://`: um player ou página maliciosa não consegue usar o endereço da capa para vazar arquivos do PC nem acessar a rede interna.
+
+## 6. Rodar o app
 
 ```sh
 cd app

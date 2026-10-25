@@ -5,3 +5,6 @@ agent/dist/
 *.jks
 *.keystore
 app/android/key.properties
+
+# Cache do Python (tools/)
+__pycache__/
