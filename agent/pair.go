@@ -73,11 +73,17 @@ func pairCmd(configPath string, args []string) error {
 		return err
 	}
 
+	pin, err := pinFor(cfg.Token)
+	if err != nil {
+		return err
+	}
+
 	q := url.Values{}
 	q.Set("name", cfg.Name)
 	q.Set("host", ip.String())
 	q.Set("port", fmt.Sprint(cfg.Port))
 	q.Set("code", start.Code)
+	q.Set("fp", pin)
 	q.Set("mac", macFor(ip, false))
 	q.Set("broadcast", broadcastFor(ip))
 	link := "velksync://pair?" + q.Encode()

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -75,17 +76,29 @@ func (s *Server) pairStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"claimed": claimed, "expired": expired, "by": by})
 }
 
-// POST /api/pair/claim (sem token): o app troca o código do QR pelo token.
+// POST /api/pair/claim (sem credencial): o app troca o código do QR por uma
+// credencial própria do celular, que pode ser revogada depois.
 func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code   string `json:"code"`
 		Device string `json:"device"`
 	}
-	if err := decode(r, &req); err != nil || !s.pairs.claim(req.Code, req.Device+" ("+r.RemoteAddr+")") {
+	name := "celular"
+	if err := decode(r, &req); err == nil && strings.TrimSpace(req.Device) != "" {
+		name = strings.TrimSpace(req.Device)
+	}
+	if req.Code == "" || !s.pairs.claim(req.Code, name+" ("+r.RemoteAddr+")") {
+		s.limiter.Fail(remoteIP(r).String())
 		log.Printf("pareamento recusado de %s", r.RemoteAddr)
 		writeErr(w, http.StatusForbidden, "código de pareamento inválido, usado ou expirado; gere outro com velksync-agent pair")
 		return
 	}
-	log.Printf("pareado: %s %s", req.Device, r.RemoteAddr)
-	writeJSON(w, http.StatusOK, map[string]any{"token": s.cfg.Token, "name": s.cfg.Name})
+	id := newDeviceID()
+	s.addDevice(id, name)
+	log.Printf("pareado: %s (%s) de %s", name, id, r.RemoteAddr)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"device_id": id,
+		"token":     deviceToken(s.cfg.Token, id),
+		"name":      s.cfg.Name,
+	})
 }

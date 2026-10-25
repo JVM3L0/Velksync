@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -15,15 +16,18 @@ import (
 	"time"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 const usage = `velksync-agent %s
 
 Uso:
   velksync-agent [-config arquivo]                 inicia o agente
   velksync-agent init [-token T] [-force]          cria a config (use o mesmo token nos dois sistemas do dual boot)
-  velksync-agent token                             mostra o token
-  velksync-agent pair [-host IP]                   mostra um QR para parear o app
+  velksync-agent token                             mostra o token mestre (não compartilhe; celulares usam o QR)
+  velksync-agent pair [-host IP]                   mostra um QR para parear um celular
+  velksync-agent devices                           lista os celulares pareados e revogados
+  velksync-agent revoke <id ou nome>               revoga um celular (no dual boot, revogue nos dois sistemas)
+  velksync-agent fingerprint                       mostra o pin do certificado TLS deste PC
   velksync-agent send <tipo> [texto]               envia ao celular: notify, open_url, clipboard, vibrate
 
 Config padrão: %s
@@ -55,6 +59,18 @@ func main() {
 		}
 	case "pair":
 		err = pairCmd(*configPath, args)
+	case "devices":
+		err = devicesCmd(*configPath)
+	case "revoke":
+		err = revokeCmd(*configPath, args)
+	case "fingerprint":
+		var cfg Config
+		if cfg, err = loadConfig(*configPath); err == nil {
+			var pin string
+			if pin, err = pinFor(cfg.Token); err == nil {
+				fmt.Printf("%s\n(no app: %s)\n", pin, shortPin(pin))
+			}
+		}
 	case "send":
 		err = sendCmd(*configPath, args)
 	default:
@@ -120,11 +136,22 @@ func run(configPath, logPath string) error {
 		return err
 	}
 
+	cert, pin, err := tlsCertificate(cfg.Token, cfg.Name)
+	if err != nil {
+		return fmt.Errorf("certificado TLS: %w", err)
+	}
+
 	go serveDiscovery(cfg)
-	srv := &Server{cfg: cfg, hub: NewHub()}
+	srv := &Server{cfg: cfg, configPath: configPath, hub: NewHub()}
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	log.Printf("velksync-agent %s ouvindo em %s (terminal livre: %v)", version, addr, cfg.AllowShell)
-	return (&http.Server{Addr: addr, Handler: srv.routes(), ReadHeaderTimeout: 10 * time.Second}).ListenAndServe()
+	log.Printf("velksync-agent %s ouvindo em https://%s (terminal livre: %v, pin %s)", version, addr, cfg.AllowShell, shortPin(pin))
+	hs := &http.Server{
+		Addr:              addr,
+		Handler:           srv.routes(),
+		ReadHeaderTimeout: 10 * time.Second,
+		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12},
+	}
+	return hs.ListenAndServeTLS("", "")
 }
 
 func sendCmd(configPath string, args []string) error {
@@ -152,19 +179,28 @@ func sendCmd(configPath string, args []string) error {
 	return nil
 }
 
-// localAPI calls the agent running on this machine, authenticated with the
-// token from the config. Used by the send and pair commands.
+// localAPI calls the agent running on this machine over HTTPS, pinned to the
+// key derived from the config and authenticated with the master token (only
+// accepted from localhost). Used by the send, pair, devices and revoke commands.
 func localAPI(cfg Config, method, path string, body, out any) error {
 	var rd io.Reader
 	if body != nil {
 		data, _ := json.Marshal(body)
 		rd = bytes.NewReader(data)
 	}
-	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", cfg.Port, path), rd)
+	pin, err := pinFor(cfg.Token)
+	if err != nil {
+		return err
+	}
+	req, _ := http.NewRequest(method, fmt.Sprintf("https://127.0.0.1:%d%s", cfg.Port, path), rd)
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: pinnedTLS(pin)}}
+	resp, err := client.Do(req)
 	if err != nil {
+		if strings.Contains(err.Error(), "HTTP response to HTTPS client") {
+			return errors.New("o agente rodando é uma versão antiga, sem HTTPS; reinstale")
+		}
 		return fmt.Errorf("agente não está rodando? %w", err)
 	}
 	defer resp.Body.Close()
@@ -183,4 +219,54 @@ func localAPI(cfg Config, method, path string, body, out any) error {
 		return errors.New(e.Error)
 	}
 	return json.Unmarshal(data, out)
+}
+
+func devicesCmd(configPath string) error {
+	cfg, err := loadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	var out struct {
+		Devices []PairedDevice `json:"devices"`
+		Revoked []string       `json:"revoked"`
+	}
+	if err := localAPI(cfg, "GET", "/api/devices", nil, &out); err != nil {
+		// Agente parado: mostra o que está na config.
+		out.Devices, out.Revoked = cfg.Devices, cfg.Revoked
+	}
+	if len(out.Devices) == 0 {
+		fmt.Println("Nenhum celular pareado neste sistema.")
+	}
+	for _, d := range out.Devices {
+		fmt.Printf("%s  %-24s pareado em %s\n", d.ID, d.Name, d.PairedAt.Local().Format("02/01/2006 15:04"))
+	}
+	if len(out.Revoked) > 0 {
+		fmt.Printf("Revogados: %s\n", strings.Join(out.Revoked, ", "))
+	}
+	return nil
+}
+
+func revokeCmd(configPath string, args []string) error {
+	if len(args) != 1 {
+		return errors.New("uso: velksync-agent revoke <id ou nome>")
+	}
+	cfg, err := loadConfig(configPath)
+	if err != nil {
+		return err
+	}
+	var out struct {
+		Revoked []string `json:"revoked"`
+	}
+	if err := localAPI(cfg, "POST", "/api/devices/revoke", map[string]string{"target": args[0]}, &out); err != nil {
+		if !strings.Contains(err.Error(), "não está rodando") {
+			return err
+		}
+		// Agente parado: revoga direto na config; vale quando ele subir.
+		srv := &Server{cfg: cfg, configPath: configPath}
+		if out.Revoked = srv.revoke(args[0]); len(out.Revoked) == 0 {
+			return errors.New("nenhum celular com esse id ou nome")
+		}
+	}
+	fmt.Printf("Revogado: %s\nNo dual boot, rode o mesmo comando no outro sistema.\n", strings.Join(out.Revoked, ", "))
+	return nil
 }

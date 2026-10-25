@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 // Command is a preset command the app can trigger by id. Linux and Windows
@@ -36,6 +37,16 @@ type Config struct {
 	AllowShell     bool      `json:"allow_shell"`
 	CommandTimeout int       `json:"command_timeout_seconds"`
 	Commands       []Command `json:"commands"`
+	// Celulares pareados neste sistema (só para listar) e ids revogados.
+	// No dual boot, revogue nos dois sistemas.
+	Devices []PairedDevice `json:"devices,omitempty"`
+	Revoked []string       `json:"revoked,omitempty"`
+}
+
+type PairedDevice struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	PairedAt time.Time `json:"paired_at"`
 }
 
 func defaultConfigPath() string {

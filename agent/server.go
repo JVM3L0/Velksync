@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,24 +13,33 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
 const maxOutput = 64 << 10
 
 type Server struct {
-	cfg   Config
-	hub   *Hub
-	pairs *Pairings
+	cfg        Config
+	configPath string
+	hub        *Hub
+	pairs      *Pairings
+	limiter    *Limiter
+	mu         sync.Mutex // protege cfg.Devices e cfg.Revoked
 }
 
 func (s *Server) routes() http.Handler {
 	if s.pairs == nil {
 		s.pairs = newPairings()
 	}
+	if s.limiter == nil {
+		s.limiter = newLimiter()
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/pair/start", s.pairStart)
-	mux.HandleFunc("GET /api/pair/status", s.pairStatus)
+	mux.HandleFunc("POST /api/pair/start", masterOnly(s.pairStart))
+	mux.HandleFunc("GET /api/pair/status", masterOnly(s.pairStatus))
+	mux.HandleFunc("GET /api/devices", masterOnly(s.listDevices))
+	mux.HandleFunc("POST /api/devices/revoke", masterOnly(s.revokeDevice))
 	mux.HandleFunc("GET /api/info", s.info)
 	mux.HandleFunc("POST /api/power", s.power)
 	mux.HandleFunc("GET /api/commands", s.listCommands)
@@ -40,23 +48,45 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/events", s.events)
 	mux.HandleFunc("POST /api/push", s.push)
 
-	// Única rota sem token: protegida pelo código de uso único do QR.
+	// Única rota sem credencial: protegida pelo código de uso único do QR.
 	root := http.NewServeMux()
-	root.HandleFunc("POST /api/pair/claim", s.pairClaim)
+	root.HandleFunc("POST /api/pair/claim", s.limited(s.pairClaim))
 	root.Handle("/", s.auth(mux))
 	return root
 }
 
-func (s *Server) auth(next http.Handler) http.Handler {
-	want := []byte("Bearer " + s.cfg.Token)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got := []byte(r.Header.Get("Authorization"))
-		if subtle.ConstantTimeCompare(got, want) != 1 {
-			log.Printf("401 %s %s de %s", r.Method, r.URL.Path, r.RemoteAddr)
-			writeErr(w, http.StatusUnauthorized, "token inválido")
+func remoteIP(r *http.Request) net.IP {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return nil
+	}
+	return net.ParseIP(host)
+}
+
+// limited recusa IPs bloqueados por excesso de falhas.
+func (s *Server) limited(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if blocked, wait := s.limiter.Blocked(remoteIP(r).String()); blocked {
+			w.Header().Set("Retry-After", fmt.Sprint(int(wait.Seconds())))
+			writeErr(w, http.StatusTooManyRequests, fmt.Sprintf("muitas tentativas inválidas; tente de novo em %s", wait))
 			return
 		}
-		next.ServeHTTP(w, r)
+		next(w, r)
+	}
+}
+
+func (s *Server) auth(next http.Handler) http.Handler {
+	return s.limited(func(w http.ResponseWriter, r *http.Request) {
+		ip := remoteIP(r)
+		a, _ := checkAuth(r.Header.Get("Authorization"), s.cfg.Token, ip, s.isRevoked)
+		if a == authDenied {
+			s.limiter.Fail(ip.String())
+			log.Printf("401 %s %s de %s", r.Method, r.URL.Path, r.RemoteAddr)
+			writeErr(w, http.StatusUnauthorized, "credencial inválida ou revogada; pareie de novo pelo QR")
+			return
+		}
+		s.limiter.Success(ip.String())
+		next.ServeHTTP(w, withAuth(r, a))
 	})
 }
 
