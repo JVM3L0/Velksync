@@ -178,7 +178,7 @@ class _MediaPanelState extends State<MediaPanel> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
-        _cover(st, scheme),
+        MediaCover(art: st.available ? _art : null, artId: _artId, available: st.available, playing: st.playing),
         const SizedBox(height: 24),
         if (st.available) ...[
           Text(
@@ -215,46 +215,6 @@ class _MediaPanelState extends State<MediaPanel> {
           ),
         if (st.volume != null) ...[const SizedBox(height: 28), _volume(st, scheme)],
       ],
-    );
-  }
-
-  Widget _cover(MediaState st, ColorScheme scheme) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: AnimatedSwitcher(
-            duration: Motion.spatialDuration,
-            switchInCurve: Motion.effects,
-            child: _art != null && st.available
-                ? ClipRRect(
-                    key: ValueKey(_artId),
-                    borderRadius: BorderRadius.circular(Radii.xl),
-                    child: Image.memory(_art!, fit: BoxFit.cover, gaplessPlayback: true),
-                  )
-                : Container(
-                    key: const ValueKey('sem-capa'),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(Radii.xl),
-                    ),
-                    child: Center(
-                      child: MorphingShape(
-                        shape: st.playing ? LoadShape.sunny : LoadShape.cookie4,
-                        color: scheme.secondaryContainer,
-                        size: 140,
-                        child: Icon(
-                          st.available ? Symbols.music_note_rounded : Symbols.music_off_rounded,
-                          size: 56,
-                          color: scheme.onSecondaryContainer,
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -431,6 +391,67 @@ class _PlayButtonState extends State<_PlayButton> {
                 color: enabled ? scheme.onPrimary : scheme.onSurfaceVariant,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Capa quadrada do que está tocando; sem capa, um formato que muda de
+/// forma conforme toca ou não.
+class MediaCover extends StatelessWidget {
+  final Uint8List? art;
+  final String artId;
+  final bool available, playing;
+  const MediaCover({super.key, this.art, this.artId = '', this.available = true, this.playing = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: AnimatedSwitcher(
+            duration: Motion.spatialDuration,
+            switchInCurve: Motion.effects,
+            // O AnimatedSwitcher dá restrições frouxas: sem o SizedBox.expand
+            // a capa (o Windows manda 120 px) ficava no tamanho natural, minúscula.
+            child: art != null
+                ? SizedBox.expand(
+                    key: ValueKey(artId),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(Radii.xl),
+                      child: Image.memory(
+                        art!,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
+                        // Ampliada ~3x: suaviza em vez de pixelar.
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
+                  )
+                : Container(
+                    key: const ValueKey('sem-capa'),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(Radii.xl),
+                    ),
+                    child: Center(
+                      child: MorphingShape(
+                        shape: playing ? LoadShape.sunny : LoadShape.cookie4,
+                        color: scheme.secondaryContainer,
+                        size: 140,
+                        child: Icon(
+                          available ? Symbols.music_note_rounded : Symbols.music_off_rounded,
+                          size: 56,
+                          color: scheme.onSecondaryContainer,
+                        ),
+                      ),
+                    ),
+                  ),
           ),
         ),
       ),
