@@ -66,3 +66,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Testes JVM do widget: o org.json do Android é só um esboço fora do aparelho.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
+}

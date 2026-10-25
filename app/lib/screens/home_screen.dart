@@ -10,6 +10,7 @@ import '../services/pc_events.dart';
 import '../services/pc_probe.dart';
 import '../services/settings.dart';
 import '../services/wake_tracker.dart';
+import '../services/widget_bridge.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
 import '../ui/wake_help.dart';
@@ -35,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _wakes = WakeTracker.instance;
   Timer? _poll;
   final _celebrated = <String>{}; // PCs cujo "ligou" já foi comemorado
+  final _widget = WidgetBridge();
 
   @override
   void initState() {
@@ -91,6 +93,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _devices = await _store.load();
     if (mounted) setState(() {});
     _start();
+    // Toque no widget: abre direto a tela daquele PC.
+    WidgetBridge.onOpenDevice(_openById);
+    final launched = await WidgetBridge.takeLaunchDevice();
+    if (launched != null) _openById(launched);
+  }
+
+  void _openById(String id) {
+    if (!mounted) return;
+    final d = _devices.where((x) => x.id == id).firstOrNull;
+    if (d == null) return; // id que não é nosso (outro app pode abrir a activity)
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    Navigator.push(context, MaterialPageRoute(builder: (_) => DeviceScreen(device: d, onEdit: () => _edit(d))))
+        .then((_) => _refresh());
   }
 
   void _start() {
@@ -106,6 +121,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final state = await probePc(d);
         if (!mounted) return;
         setState(() => _status[d.id] = state);
+        _widget.report(d.id, state.power);
         // Aprende sozinho, na primeira vez que o PC responde, o MAC para o
         // Wake-on-LAN e o segredo do sinal de presença.
         final mac = state.info?.mac ?? '';
@@ -140,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
     await _store.forget(d);
     await _store.save(_devices);
+    await _widget.forget(d.id);
     _events.update(_devices);
   }
 

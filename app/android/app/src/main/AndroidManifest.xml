@@ -45,6 +45,30 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE"/>
             </intent-filter>
         </service>
+        <!-- Widget "Ligar PC" na tela inicial. O provider precisa ser exportado
+             para o launcher; o toque no botão abre uma confirmação interna. -->
+        <receiver
+            android:name=".WakeWidgetProvider"
+            android:exported="true"
+            android:label="Ligar PC">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/wake_widget_info"/>
+        </receiver>
+        <receiver
+            android:name=".WakeWidgetReceiver"
+            android:exported="false"/>
+        <!-- Diálogo "Ligar <PC>?" do widget, sobre a tela inicial. -->
+        <activity
+            android:name=".ConfirmWakeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
