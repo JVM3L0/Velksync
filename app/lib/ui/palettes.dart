@@ -1,7 +1,31 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 
 /// Paletas fixas (Gruvbox e Catppuccin) mapeadas para os papéis do Material 3.
-/// Cores oficiais: github.com/morhetz/gruvbox e github.com/catppuccin/palette.
+/// Cores oficiais: github.com/morhetz/gruvbox, github.com/sainnhe/gruvbox-material
+/// e github.com/catppuccin/palette.
+
+/// Gruvbox: o original saturado ou o Gruvbox Material suave (tons pastéis).
+enum GruvboxVariant {
+  soft('Suave', 'Gruvbox Material, tons pastéis'),
+  classic('Original', 'Cores fortes do Gruvbox');
+
+  final String label, description;
+  const GruvboxVariant(this.label, this.description);
+}
+
+/// Sabor escuro do Catppuccin; o claro é sempre o Latte. Do mais suave ao
+/// mais contrastado.
+enum CatppuccinFlavor {
+  frappe('Frappé'),
+  macchiato('Macchiato'),
+  mocha('Mocha');
+
+  final String label;
+  const CatppuccinFlavor(this.label);
+}
+
 class Palette {
   final String name;
   final Brightness brightness;
@@ -33,24 +57,31 @@ class Palette {
     final dark = brightness == Brightness.dark;
     // Contêineres "tonais": a cor de destaque misturada ao fundo, como no M3.
     Color container(Color c) => Color.alphaBlend(c.withValues(alpha: dark ? 0.24 : 0.20), background);
-    // Puxado para a cor de texto o bastante para passar no contraste AA (teste).
-    Color onContainer(Color c) => dark ? Color.lerp(c, text, 0.5)! : Color.lerp(c, text, 0.6)!;
+    // Puxado para a cor de texto e, se ainda faltar contraste (paletas suaves),
+    // clareado/escurecido até o mínimo AA.
+    Color onContainer(Color c) => readable(dark ? Color.lerp(c, text, 0.5)! : Color.lerp(c, text, 0.6)!, container(c));
+    final onAccent = dark ? lowest : background;
+    // Botão cheio: quem cede é o fundo do botão, para o texto continuar claro/escuro.
+    Color accent(Color c) => readable(c, onAccent);
+    final primary = accent(this.primary), secondary = accent(this.secondary);
+    final tertiary = accent(this.tertiary), error = accent(this.error);
+    final subtext = readable(this.subtext, containers[1]);
     return ColorScheme(
       brightness: brightness,
       primary: primary,
-      onPrimary: dark ? lowest : background,
+      onPrimary: onAccent,
       primaryContainer: container(primary),
       onPrimaryContainer: onContainer(primary),
       secondary: secondary,
-      onSecondary: dark ? lowest : background,
+      onSecondary: onAccent,
       secondaryContainer: container(secondary),
       onSecondaryContainer: onContainer(secondary),
       tertiary: tertiary,
-      onTertiary: dark ? lowest : background,
+      onTertiary: onAccent,
       tertiaryContainer: container(tertiary),
       onTertiaryContainer: onContainer(tertiary),
       error: error,
-      onError: dark ? lowest : background,
+      onError: onAccent,
       errorContainer: container(error),
       onErrorContainer: onContainer(error),
       surface: background,
@@ -71,6 +102,29 @@ class Palette {
       scrim: Colors.black,
     );
   }
+}
+
+/// Contraste WCAG 2.x entre duas cores (1 a 21).
+double contrastRatio(Color a, Color b) {
+  double lum(Color c) {
+    double ch(double v) => v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+  }
+
+  final l1 = lum(a), l2 = lum(b);
+  return (math.max(l1, l2) + 0.05) / (math.min(l1, l2) + 0.05);
+}
+
+/// [fg] com contraste AA (4.5:1) sobre [bg]: se já tem, volta igual; senão vai
+/// em direção ao preto ou ao branco (o que se afasta de [bg]) só o necessário.
+Color readable(Color fg, Color bg, {double min = 4.5}) {
+  if (contrastRatio(fg, bg) >= min) return fg;
+  final target = contrastRatio(Colors.black, bg) > contrastRatio(Colors.white, bg) ? Colors.black : Colors.white;
+  for (var t = 0.05; t < 1; t += 0.05) {
+    final c = Color.lerp(fg, target, t)!;
+    if (contrastRatio(c, bg) >= min) return c;
+  }
+  return target;
 }
 
 abstract final class Palettes {
@@ -132,5 +186,92 @@ abstract final class Palettes {
     secondary: Color(0xFF1E66F5), // blue
     tertiary: Color(0xFFEA76CB), // pink
     error: Color(0xFFD20F39), // red
+  );
+
+  // Gruvbox Material, fundo "soft" e frente "material": a versão pastel.
+  // bg2/bg4 do soft repetem bg1/bg3; os níveis intermediários vêm do medium.
+  static const gruvboxSoftDark = Palette(
+    name: 'Gruvbox Suave Dark',
+    brightness: Brightness.dark,
+    background: Color(0xFF32302F), // bg0
+    lowest: Color(0xFF252423), // bg_dim
+    containers: [Color(0xFF3C3836), Color(0xFF45403D), Color(0xFF504945), Color(0xFF5A524C)],
+    text: Color(0xFFD4BE98), // fg0
+    subtext: Color(0xFFA89984), // grey2
+    outline: Color(0xFF928374), // grey1
+    primary: Color(0xFFD8A657), // yellow
+    secondary: Color(0xFF7DAEA3), // blue
+    tertiary: Color(0xFFD3869B), // purple
+    error: Color(0xFFEA6962), // red
+  );
+
+  static const gruvboxSoftLight = Palette(
+    name: 'Gruvbox Suave Light',
+    brightness: Brightness.light,
+    background: Color(0xFFF2E5BC), // bg0
+    lowest: Color(0xFFF9F5D7), // bg0 do hard: o nível mais claro
+    containers: [Color(0xFFEDDEB5), Color(0xFFEBDBB2), Color(0xFFE6D5AE), Color(0xFFDAC9A5)], // bg1-4
+    text: Color(0xFF654735), // fg0
+    subtext: Color(0xFF7C6F64), // grey2
+    outline: Color(0xFF928374), // grey1
+    primary: Color(0xFFC35E0A), // orange
+    secondary: Color(0xFF45707A), // blue
+    tertiary: Color(0xFF945E80), // purple
+    error: Color(0xFFC14A4A), // red
+  );
+
+  static const catppuccinFrappe = Palette(
+    name: 'Catppuccin Frappé',
+    brightness: Brightness.dark,
+    background: Color(0xFF303446), // base
+    lowest: Color(0xFF232634), // crust
+    containers: [Color(0xFF292C3C), Color(0xFF414559), Color(0xFF51576D), Color(0xFF626880)], // mantle, surface0-2
+    text: Color(0xFFC6D0F5), // text
+    subtext: Color(0xFFA5ADCE), // subtext0
+    outline: Color(0xFF838BA7), // overlay1
+    primary: Color(0xFFCA9EE6), // mauve
+    secondary: Color(0xFF8CAAEE), // blue
+    tertiary: Color(0xFFF4B8E4), // pink
+    error: Color(0xFFE78284), // red
+  );
+
+  static const catppuccinMacchiato = Palette(
+    name: 'Catppuccin Macchiato',
+    brightness: Brightness.dark,
+    background: Color(0xFF24273A), // base
+    lowest: Color(0xFF181926), // crust
+    containers: [Color(0xFF1E2030), Color(0xFF363A4F), Color(0xFF494D64), Color(0xFF5B6078)], // mantle, surface0-2
+    text: Color(0xFFCAD3F5), // text
+    subtext: Color(0xFFA5ADCB), // subtext0
+    outline: Color(0xFF8087A2), // overlay1
+    primary: Color(0xFFC6A0F6), // mauve
+    secondary: Color(0xFF8AADF4), // blue
+    tertiary: Color(0xFFF5BDE6), // pink
+    error: Color(0xFFED8796), // red
+  );
+
+  static const all = [
+    gruvboxDark,
+    gruvboxLight,
+    gruvboxSoftDark,
+    gruvboxSoftLight,
+    catppuccinMocha,
+    catppuccinMacchiato,
+    catppuccinFrappe,
+    catppuccinLatte,
+  ];
+
+  static (Palette light, Palette dark) gruvbox(GruvboxVariant v) => switch (v) {
+    GruvboxVariant.soft => (gruvboxSoftLight, gruvboxSoftDark),
+    GruvboxVariant.classic => (gruvboxLight, gruvboxDark),
+  };
+
+  static (Palette light, Palette dark) catppuccin(CatppuccinFlavor f) => (
+    catppuccinLatte,
+    switch (f) {
+      CatppuccinFlavor.frappe => catppuccinFrappe,
+      CatppuccinFlavor.macchiato => catppuccinMacchiato,
+      CatppuccinFlavor.mocha => catppuccinMocha,
+    },
   );
 }

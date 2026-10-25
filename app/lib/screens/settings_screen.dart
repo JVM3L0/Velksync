@@ -27,10 +27,11 @@ class SettingsScreen extends StatelessWidget {
             final scheme = Theme.of(context).colorScheme;
             final dark = Theme.of(context).brightness == Brightness.dark;
             final wall = schemeFrom(dark ? wallDark : wallLight, dark ? Brightness.dark : Brightness.light);
+            Palette pick((Palette, Palette) p) => dark ? p.$2 : p.$1;
             List<Color> swatches(ThemeFamily f) => switch (f) {
               ThemeFamily.dynamic => [wall.surface, wall.primary, wall.secondary, wall.tertiary, wall.error],
-              ThemeFamily.gruvbox => (dark ? Palettes.gruvboxDark : Palettes.gruvboxLight).swatches,
-              ThemeFamily.catppuccin => (dark ? Palettes.catppuccinMocha : Palettes.catppuccinLatte).swatches,
+              ThemeFamily.gruvbox => pick(Palettes.gruvbox(settings.gruvbox)).swatches,
+              ThemeFamily.catppuccin => pick(Palettes.catppuccin(settings.catppuccin)).swatches,
             };
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
@@ -46,6 +47,39 @@ class SettingsScreen extends StatelessWidget {
                         onTap: () => settings.setFamily(f),
                       ),
                   ],
+                ),
+                // Variante só para as famílias que têm (Gruvbox e Catppuccin).
+                AnimatedSize(
+                  duration: Motion.spatialDuration,
+                  curve: Motion.effects,
+                  alignment: Alignment.topCenter,
+                  child: switch (settings.family) {
+                    ThemeFamily.gruvbox => _Variant(
+                      label: 'Variante',
+                      hint: settings.gruvbox.description,
+                      child: SegmentedButton<GruvboxVariant>(
+                        showSelectedIcon: false,
+                        segments: [
+                          for (final v in GruvboxVariant.values) ButtonSegment(value: v, label: Text(v.label)),
+                        ],
+                        selected: {settings.gruvbox},
+                        onSelectionChanged: (s) => settings.setGruvbox(s.first),
+                      ),
+                    ),
+                    ThemeFamily.catppuccin => _Variant(
+                      label: 'Sabor escuro',
+                      hint: 'Do mais suave ao mais contrastado; o modo claro usa o Latte.',
+                      child: SegmentedButton<CatppuccinFlavor>(
+                        showSelectedIcon: false,
+                        segments: [
+                          for (final f in CatppuccinFlavor.values) ButtonSegment(value: f, label: Text(f.label)),
+                        ],
+                        selected: {settings.catppuccin},
+                        onSelectionChanged: (s) => settings.setCatppuccin(s.first),
+                      ),
+                    ),
+                    ThemeFamily.dynamic => const SizedBox(width: double.infinity),
+                  },
                 ),
                 const SectionLabel('Modo'),
                 SegmentedButton<ThemeMode>(
@@ -65,7 +99,8 @@ class SettingsScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
                   child: Text(
-                    'Gruvbox usa as variantes Dark/Light e Catppuccin usa Mocha/Latte conforme o modo.',
+                    'Os temas acompanham o modo: Gruvbox nas versões clara e escura, Catppuccin no Latte '
+                    'quando claro e no sabor escolhido quando escuro.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
@@ -222,4 +257,26 @@ class _TilePickerState extends State<_TilePicker> {
       ],
     );
   }
+}
+
+class _Variant extends StatelessWidget {
+  final String label, hint;
+  final Widget child;
+  const _Variant({required this.label, required this.hint, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      SectionLabel(label),
+      child,
+      Padding(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+        child: Text(
+          hint,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ),
+    ],
+  );
 }

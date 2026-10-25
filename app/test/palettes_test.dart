@@ -16,9 +16,7 @@ double contrast(Color a, Color b) {
 }
 
 void main() {
-  const all = [Palettes.gruvboxDark, Palettes.gruvboxLight, Palettes.catppuccinMocha, Palettes.catppuccinLatte];
-
-  for (final p in all) {
+  for (final p in Palettes.all) {
     group(p.name, () {
       final s = p.toScheme();
       final pairs = {

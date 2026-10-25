@@ -3,7 +3,6 @@ import 'package:material_ui/material_ui.dart';
 
 import 'screens/home_screen.dart';
 import 'services/settings.dart';
-import 'ui/palettes.dart';
 import 'ui/theme.dart';
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -25,11 +24,10 @@ class VelksyncApp extends StatelessWidget {
       listenable: settings,
       builder: (_, _) => DynamicColorBuilder(
         builder: (light, dark) {
-          final (lightScheme, darkScheme) = switch (settings.family) {
+          final (lightScheme, darkScheme) = switch (settings.palettes) {
             // Cores do papel de parede (Material You), como o Caelestia faz no desktop.
-            ThemeFamily.dynamic => (schemeFrom(light, Brightness.light), schemeFrom(dark, Brightness.dark)),
-            ThemeFamily.gruvbox => (Palettes.gruvboxLight.toScheme(), Palettes.gruvboxDark.toScheme()),
-            ThemeFamily.catppuccin => (Palettes.catppuccinLatte.toScheme(), Palettes.catppuccinMocha.toScheme()),
+            null => (schemeFrom(light, Brightness.light), schemeFrom(dark, Brightness.dark)),
+            (final l, final d) => (l.toScheme(), d.toScheme()),
           };
           return MaterialApp(
             title: 'Velksync',
