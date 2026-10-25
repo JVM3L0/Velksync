@@ -5,11 +5,13 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/device.dart';
 import '../services/agent_client.dart';
-import '../services/wol.dart';
+import '../services/pc_probe.dart';
+import '../services/wake_tracker.dart';
 import '../ui/media_panel.dart';
 import '../ui/perf.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
+import '../ui/wake_help.dart';
 import '../ui/widgets.dart';
 import 'terminal_screen.dart';
 
@@ -26,6 +28,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
   late final _client = AgentClient(widget.device);
   AgentInfo? _info;
   bool _checked = false;
+  String? _awaitingLoginOs; // só o sinal de presença respondeu
+  final _wakes = WakeTracker.instance;
   List<PresetCommand> _commands = [];
   String? _running;
   PcStats? _stats;
@@ -36,6 +40,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   @override
   void initState() {
     super.initState();
+    _wakes.addListener(_onWake);
     if (!widget.device.paired) return; // sem credencial: só dá para ligar
     _refresh();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
@@ -45,6 +50,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
 
   @override
   void dispose() {
+    _wakes.removeListener(_onWake);
     _poll?.cancel();
     _statsPoll?.cancel();
     _client.close();
@@ -65,19 +71,29 @@ class _DeviceScreenState extends State<DeviceScreen> {
     }
   }
 
+  void _onWake() {
+    if (!mounted) return;
+    final p = _wakes.of(widget.device.id);
+    // O PC acabou de responder ao "ligar": atualiza sem esperar o próximo ciclo.
+    if (p != null && !p.active && p.phase != WakePhase.failed) _refresh();
+    setState(() {});
+  }
+
   Future<void> _refresh() async {
-    AgentInfo? info;
+    final state = await probePc(widget.device);
     var commands = _commands;
-    try {
-      info = await _client.info();
-      if (_info == null) commands = await _client.commands();
-    } on AgentException {
-      info = null;
+    if (state.info != null && _info == null) {
+      try {
+        commands = await _client.commands();
+      } on AgentException {
+        commands = [];
+      }
     }
     if (!mounted) return;
     setState(() {
-      _info = info;
-      _commands = info == null ? [] : commands;
+      _info = state.info;
+      _awaitingLoginOs = state.power == PcPower.awaitingLogin ? state.os : null;
+      _commands = state.info == null ? [] : commands;
       _checked = true;
     });
   }
@@ -86,8 +102,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
 
   Future<void> _wake() async {
     try {
-      await wake(widget.device.mac, broadcast: widget.device.broadcast);
-      _snack('Sinal enviado. O PC deve ligar em alguns segundos.');
+      await _wakes.start(widget.device);
     } catch (e) {
       _snack('Falha: $e');
     }
@@ -134,11 +149,15 @@ class _DeviceScreenState extends State<DeviceScreen> {
   Widget build(BuildContext context) {
     final d = widget.device;
     final online = _info != null;
-    final status = !d.paired
-        ? PcStatus.unpaired
-        : !_checked
-        ? PcStatus.checking
-        : (online ? PcStatus.online : PcStatus.offline);
+    final status = switch (_wakes.of(d.id)?.phase) {
+      WakePhase.waiting => PcStatus.waking,
+      WakePhase.failed => PcStatus.wakeFailed,
+      _ when !d.paired => PcStatus.unpaired,
+      _ when !_checked => PcStatus.checking,
+      _ when online => PcStatus.online,
+      _ when _awaitingLoginOs != null => PcStatus.awaitingLogin,
+      _ => PcStatus.offline,
+    };
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
@@ -220,7 +239,11 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 label: 'Ligar',
                 color: scheme.primary,
                 onColor: scheme.onPrimary,
-                onTap: !online && d.mac.isNotEmpty ? _wake : null,
+                onTap:
+                    (status == PcStatus.offline || status == PcStatus.unpaired || status == PcStatus.wakeFailed) &&
+                        d.mac.isNotEmpty
+                    ? _wake
+                    : null,
               ),
               MorphTile(
                 icon: Symbols.power_off_rounded,
@@ -272,16 +295,38 @@ class _DeviceScreenState extends State<DeviceScreen> {
 
   Widget _hero(PcStatus status) {
     final online = status == PcStatus.online;
+    final on = online || status == PcStatus.awaitingLogin;
+    final wake = _wakes.of(widget.device.id);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final fg = online ? scheme.onPrimaryContainer : scheme.onSurface;
-    final sub = online ? '${_info!.osLabel} · ${_info!.hostname} · ${widget.device.host}' : widget.device.host;
-    return AnimatedContainer(
+    final fg = switch (status) {
+      PcStatus.online => scheme.onPrimaryContainer,
+      PcStatus.awaitingLogin || PcStatus.waking => scheme.onSecondaryContainer,
+      PcStatus.wakeFailed => scheme.onErrorContainer,
+      _ => scheme.onSurface,
+    };
+    final host = widget.device.host;
+    final sub = switch (status) {
+      PcStatus.online => '${_info!.osLabel} · ${_info!.hostname} · $host',
+      PcStatus.offline => '$host · ou fora da rede',
+      PcStatus.unpaired => 'Edite e escaneie o QR do PC para controlar. Ligar já funciona.',
+      PcStatus.awaitingLogin => '${osLabelOf(_awaitingLoginOs ?? '')} · faça login no PC para controlar',
+      PcStatus.waking =>
+        'Sinal enviado há ${formatElapsed(wake!.elapsed)}${wake.sends > 1 ? ' · reenviado ${wake.sends - 1}×' : ''}',
+      PcStatus.wakeFailed => 'Sem resposta em 2 minutos. Toque para ver o que conferir.',
+      PcStatus.checking => host,
+    };
+    final card = AnimatedContainer(
       duration: Motion.spatialDuration,
       curve: Motion.effects,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: online ? scheme.primaryContainer : scheme.surfaceContainerHigh,
+        color: switch (status) {
+          PcStatus.online => scheme.primaryContainer,
+          PcStatus.awaitingLogin || PcStatus.waking => scheme.secondaryContainer,
+          PcStatus.wakeFailed => scheme.errorContainer,
+          _ => scheme.surfaceContainerHigh,
+        },
         borderRadius: BorderRadius.circular(Radii.xlPlus),
       ),
       child: Row(
@@ -292,14 +337,29 @@ class _DeviceScreenState extends State<DeviceScreen> {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: online ? scheme.primary : scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(online ? Radii.xxl : Radii.lgPlus),
+              color: online
+                  ? scheme.primary
+                  : on
+                  ? scheme.secondary
+                  : scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(on ? Radii.xxl : Radii.lgPlus),
             ),
-            child: Icon(
-              online ? osIcon(_info!.os) : Symbols.computer_rounded,
-              size: 36,
-              fill: online ? 1 : 0,
-              color: online ? scheme.onPrimary : scheme.onSurfaceVariant,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  on ? osIcon(_info?.os ?? _awaitingLoginOs ?? '') : Symbols.computer_rounded,
+                  size: 36,
+                  fill: on ? 1 : 0,
+                  color: online
+                      ? scheme.onPrimary
+                      : on
+                      ? scheme.onSecondary
+                      : scheme.onSurfaceVariant,
+                ),
+                if (status == PcStatus.waking)
+                  const SizedBox.square(dimension: 64, child: CircularProgressIndicator(strokeWidth: 4)),
+              ],
             ),
           ),
           const SizedBox(width: 20),
@@ -315,22 +375,29 @@ class _DeviceScreenState extends State<DeviceScreen> {
                       PcStatus.offline => 'Desligado',
                       PcStatus.checking => 'Verificando…',
                       PcStatus.unpaired => 'Não pareado',
+                      PcStatus.awaitingLogin => 'Aguardando login',
+                      PcStatus.waking => 'Ligando…',
+                      PcStatus.wakeFailed => 'Não ligou',
                     },
                     key: ValueKey(status),
                     style: text.headlineMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(switch (status) {
-                  PcStatus.offline => '$sub · ou fora da rede',
-                  PcStatus.unpaired => 'Edite e escaneie o QR do PC para controlar. Ligar já funciona.',
-                  _ => sub,
-                }, style: text.bodyMedium?.copyWith(color: fg.withValues(alpha: 0.8))),
+                Text(sub, style: text.bodyMedium?.copyWith(color: fg.withValues(alpha: 0.8))),
               ],
             ),
           ),
         ],
       ),
+    );
+    if (status != PcStatus.wakeFailed) return card;
+    return GestureDetector(
+      onTap: () async {
+        await showWakeHelp(context);
+        _wakes.dismiss(widget.device.id);
+      },
+      child: card,
     );
   }
 

@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'theme.dart';
 
 /// unpaired: cadastrado sem credencial (só Wake-on-LAN) até escanear o QR.
-enum PcStatus { checking, online, offline, unpaired }
+enum PcStatus { checking, online, offline, unpaired, awaitingLogin, waking, wakeFailed }
 
 /// Pill showing whether the PC answers; the dot breathes while online.
 class StatusPill extends StatelessWidget {
@@ -20,6 +20,9 @@ class StatusPill extends StatelessWidget {
       PcStatus.offline => (scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 'Desligado'),
       PcStatus.checking => (scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 'Verificando'),
       PcStatus.unpaired => (scheme.tertiaryContainer, scheme.onTertiaryContainer, 'Não pareado'),
+      PcStatus.awaitingLogin => (scheme.secondaryContainer, scheme.onSecondaryContainer, 'Aguardando login'),
+      PcStatus.waking => (scheme.secondaryContainer, scheme.onSecondaryContainer, 'Ligando'),
+      PcStatus.wakeFailed => (scheme.errorContainer, scheme.onErrorContainer, 'Não ligou'),
     };
     return AnimatedContainer(
       duration: Motion.effectsDuration,
@@ -29,7 +32,15 @@ class StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Dot(color: status == PcStatus.online ? scheme.primary : scheme.outline, pulse: status == PcStatus.online),
+          _Dot(
+            color: switch (status) {
+              PcStatus.online => scheme.primary,
+              PcStatus.awaitingLogin || PcStatus.waking => scheme.secondary,
+              PcStatus.wakeFailed => scheme.error,
+              _ => scheme.outline,
+            },
+            pulse: status == PcStatus.online || status == PcStatus.waking,
+          ),
           const SizedBox(width: 8),
           Text(
             detail == null ? label : '$label · $detail',

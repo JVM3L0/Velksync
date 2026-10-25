@@ -4,13 +4,14 @@ import 'package:material_ui/material_ui.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models/device.dart';
-import '../services/agent_client.dart';
 import '../services/device_store.dart';
 import '../services/pc_events.dart';
+import '../services/pc_probe.dart';
 import '../services/settings.dart';
-import '../services/wol.dart';
+import '../services/wake_tracker.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
+import '../ui/wake_help.dart';
 import '../ui/widgets.dart';
 import 'device_form_screen.dart';
 import 'device_screen.dart';
@@ -29,19 +30,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _store = DeviceStore();
   late final _events = PcEventListener(widget.messenger);
   List<Device> _devices = [];
-  final Map<String, AgentInfo?> _status = {}; // ausente = verificando, null = offline
+  final Map<String, PcState> _status = {}; // ausente = verificando
+  final _wakes = WakeTracker.instance;
   Timer? _poll;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _wakes.addListener(_onWake);
     _load();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _wakes.removeListener(_onWake);
     _poll?.cancel();
     _events.dispose();
     super.dispose();
@@ -55,6 +59,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _poll?.cancel();
       _events.dispose();
     }
+  }
+
+  void _onWake() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _load() async {
@@ -73,20 +81,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _refresh() async {
     await Future.wait(
       _devices.where((d) => d.paired).map((d) async {
-        final client = AgentClient(d);
-        AgentInfo? info;
-        try {
-          info = await client.info();
-        } on AgentException {
-          info = null;
-        } finally {
-          client.close();
-        }
+        final state = await probePc(d);
         if (!mounted) return;
-        setState(() => _status[d.id] = info);
-        // Aprende o MAC sozinho na primeira vez que o PC responde.
-        if (info != null && info.mac.isNotEmpty && d.mac.isEmpty) {
-          await _save(d.copyWith(mac: info.mac));
+        setState(() => _status[d.id] = state);
+        // Aprende sozinho, na primeira vez que o PC responde, o MAC para o
+        // Wake-on-LAN e o segredo do sinal de presença.
+        final mac = state.info?.mac ?? '';
+        final learnMac = mac.isNotEmpty && d.mac.isEmpty;
+        if (learnMac || state.learnedPresenceKey != null) {
+          await _save(d.copyWith(mac: learnMac ? mac : null, presenceKey: state.learnedPresenceKey));
         }
       }),
     );
@@ -134,26 +137,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _wake(Device d) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await wake(d.mac, broadcast: d.broadcast);
-      messenger.showSnackBar(SnackBar(content: Text('Sinal para ligar enviado a ${d.name}')));
+      await _wakes.start(d);
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Falha: $e')));
     }
   }
 
-  PcStatus _statusOf(Device d) => !d.paired
-      ? PcStatus.unpaired
-      : !_status.containsKey(d.id)
-      ? PcStatus.checking
-      : _status[d.id] != null
-      ? PcStatus.online
-      : PcStatus.offline;
+  PcStatus _statusOf(Device d) {
+    switch (_wakes.of(d.id)?.phase) {
+      case WakePhase.waiting:
+        return PcStatus.waking;
+      case WakePhase.failed:
+        return PcStatus.wakeFailed;
+      default:
+    }
+    if (!d.paired) return PcStatus.unpaired;
+    return switch (_status[d.id]?.power) {
+      null => PcStatus.checking,
+      PcPower.online => PcStatus.online,
+      PcPower.awaitingLogin => PcStatus.awaitingLogin,
+      PcPower.offline => PcStatus.offline,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
-    final online = _devices.where((d) => _status[d.id] != null).length;
+    final online = _devices.where((d) => _status[d.id]?.power == PcPower.online).length;
     return Scaffold(
       floatingActionButton: _devices.isEmpty
           ? null
@@ -244,8 +255,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _card(Device d) {
     final status = _statusOf(d);
-    final info = _status[d.id];
-    final online = status == PcStatus.online;
+    final os = _status[d.id]?.os ?? '';
+    final on = status == PcStatus.online || status == PcStatus.awaitingLogin;
+    final wake = _wakes.of(d.id);
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     return Card(
@@ -266,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                IconBadge(icon: online ? osIcon(info!.os) : Symbols.computer_rounded, highlighted: online, size: 60),
+                IconBadge(icon: on ? osIcon(os) : Symbols.computer_rounded, highlighted: on, size: 60),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -274,7 +286,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     children: [
                       Text(d.name, style: text.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 6),
-                      StatusPill(status: status, detail: online ? info!.osLabel : null),
+                      StatusPill(
+                        status: status,
+                        detail: switch (status) {
+                          PcStatus.waking => formatElapsed(wake!.elapsed),
+                          _ when on => osLabelOf(os),
+                          _ => null,
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -282,20 +301,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   duration: Motion.spatialFastDuration,
                   switchInCurve: Motion.spatialFast,
                   transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
-                  child: (status == PcStatus.offline || status == PcStatus.unpaired) && d.mac.isNotEmpty
-                      ? IconButton.filled(
-                          key: const ValueKey('wake'),
-                          tooltip: 'Ligar',
-                          iconSize: 28,
-                          style: IconButton.styleFrom(minimumSize: const Size(56, 56)),
-                          onPressed: () => _wake(d),
-                          icon: const Icon(Symbols.power_settings_new_rounded, weight: 600),
-                        )
-                      : Icon(
-                          Symbols.keyboard_arrow_right_rounded,
-                          key: const ValueKey('open'),
-                          color: scheme.onSurfaceVariant,
-                        ),
+                  child: switch (status) {
+                    PcStatus.waking => const SizedBox.square(
+                      key: ValueKey('waking'),
+                      dimension: 56,
+                      child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()),
+                    ),
+                    PcStatus.wakeFailed => IconButton.filledTonal(
+                      key: const ValueKey('help'),
+                      tooltip: 'Por que não ligou?',
+                      iconSize: 28,
+                      style: IconButton.styleFrom(minimumSize: const Size(56, 56)),
+                      onPressed: () async {
+                        await showWakeHelp(context);
+                        _wakes.dismiss(d.id);
+                      },
+                      icon: const Icon(Symbols.help_rounded, weight: 600),
+                    ),
+                    _ when (status == PcStatus.offline || status == PcStatus.unpaired) && d.mac.isNotEmpty =>
+                      IconButton.filled(
+                        key: const ValueKey('wake'),
+                        tooltip: 'Ligar',
+                        iconSize: 28,
+                        style: IconButton.styleFrom(minimumSize: const Size(56, 56)),
+                        onPressed: () => _wake(d),
+                        icon: const Icon(Symbols.power_settings_new_rounded, weight: 600),
+                      ),
+                    _ => Icon(
+                      Symbols.keyboard_arrow_right_rounded,
+                      key: const ValueKey('open'),
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  },
                 ),
               ],
             ),
