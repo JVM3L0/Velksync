@@ -25,6 +25,7 @@ type Server struct {
 	hub        *Hub
 	pairs      *Pairings
 	limiter    *Limiter
+	live       *Live
 	mu         sync.Mutex // protege cfg.Devices e cfg.Revoked
 }
 
@@ -34,6 +35,9 @@ func (s *Server) routes() http.Handler {
 	}
 	if s.limiter == nil {
 		s.limiter = newLimiter()
+	}
+	if s.live == nil {
+		s.live = newLive(currentStats, currentMedia)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/pair/start", masterOnly(s.pairStart))
@@ -53,6 +57,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/commands/{id}", s.runCommand)
 	mux.HandleFunc("POST /api/shell", s.shell)
 	mux.HandleFunc("GET /api/events", s.events)
+	mux.HandleFunc("GET /api/live", s.liveFeed)
 	mux.HandleFunc("POST /api/push", s.push)
 
 	// Única rota sem credencial: protegida pelo código de uso único do QR.
@@ -85,7 +90,7 @@ func (s *Server) limited(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) auth(next http.Handler) http.Handler {
 	return s.limited(func(w http.ResponseWriter, r *http.Request) {
 		ip := remoteIP(r)
-		a, _ := checkAuth(r.Header.Get("Authorization"), s.cfg.Token, ip, s.isRevoked)
+		a, id := checkAuth(r.Header.Get("Authorization"), s.cfg.Token, ip, s.isRevoked)
 		if a == authDenied {
 			s.limiter.Fail(ip.String())
 			log.Printf("401 %s %s de %s", r.Method, r.URL.Path, r.RemoteAddr)
@@ -93,7 +98,7 @@ func (s *Server) auth(next http.Handler) http.Handler {
 			return
 		}
 		s.limiter.Success(ip.String())
-		next.ServeHTTP(w, withAuth(r, a))
+		next.ServeHTTP(w, withAuth(r, a, id))
 	})
 }
 
@@ -121,6 +126,8 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"version":     version,
 		"mac":         macFor(addrIP(local), false),
 		"allow_shell": s.cfg.AllowShell,
+		// O app usa o que existir aqui e cai no comportamento antigo no resto.
+		"features": []string{"live", "presence"},
 	})
 }
 

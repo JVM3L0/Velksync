@@ -11,11 +11,20 @@ import (
 
 type ctxKey int
 
-const authKey ctxKey = 0
+const (
+	authKey ctxKey = iota
+	clientKey
+)
 
 func authOf(r *http.Request) authResult {
 	a, _ := r.Context().Value(authKey).(authResult)
 	return a
+}
+
+// clientOf identifica quem fez o pedido: o id do celular ou "master" (CLI).
+func clientOf(r *http.Request) string {
+	c, _ := r.Context().Value(clientKey).(string)
+	return c
 }
 
 func (s *Server) isRevoked(id string) bool {
@@ -107,6 +116,11 @@ func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"revoked": ids})
 }
 
-func withAuth(r *http.Request, a authResult) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), authKey, a))
+func withAuth(r *http.Request, a authResult, deviceID string) *http.Request {
+	client := deviceID
+	if a == authMaster {
+		client = "master"
+	}
+	ctx := context.WithValue(r.Context(), authKey, a)
+	return r.WithContext(context.WithValue(ctx, clientKey, client))
 }

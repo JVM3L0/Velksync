@@ -67,8 +67,12 @@ var (
 
 // GET /api/stats (credencial de celular ou mestre): só leitura.
 func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, currentStats())
+}
+
+func currentStats() any {
 	st := statsCollector().collect()
 	st.CPUThreads = runtime.NumCPU()
 	st.CPUName = cpuName()
-	writeJSON(w, http.StatusOK, st)
+	return st
 }

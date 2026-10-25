@@ -44,6 +44,10 @@ var media = sync.OnceValue(newMediaBackend)
 
 // GET /api/media
 func (s *Server) mediaState(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, currentMedia())
+}
+
+func currentMedia() MediaState {
 	st, err := media().State()
 	if err != nil && !errors.Is(err, errNoMedia) {
 		log.Printf("mídia: %v", err)
@@ -51,7 +55,7 @@ func (s *Server) mediaState(w http.ResponseWriter, r *http.Request) {
 	if st.Status == "" {
 		st.Status = "stopped"
 	}
-	writeJSON(w, http.StatusOK, st)
+	return st
 }
 
 // GET /api/media/art
