@@ -82,4 +82,20 @@ void main() {
     expect(dx('aba 1'), lessThan(center), reason: 'para a esquerda, entra pela esquerda');
     await tester.pumpAndSettle();
   });
+
+  testWidgets('capa do álbum desliza mais longe que as abas', (tester) async {
+    Widget track(int i) => MaterialApp(
+      home: SharedAxisSwitcher(
+        index: i,
+        distance: 160,
+        child: Center(child: Text('faixa $i')),
+      ),
+    );
+    await tester.pumpWidget(track(0));
+    final center = tester.getCenter(find.text('faixa 0')).dx;
+    await tester.pumpWidget(track(-1)); // anterior: entra pela esquerda
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(tester.getCenter(find.text('faixa -1')).dx, lessThan(center - 100));
+    await tester.pumpAndSettle();
+  });
 }

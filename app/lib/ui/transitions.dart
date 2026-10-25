@@ -117,14 +117,16 @@ class ContainerTransformRoute<T> extends PageRoute<T> {
 class SharedAxisSwitcher extends StatefulWidget {
   final int index;
   final Widget child;
-  const SharedAxisSwitcher({super.key, required this.index, required this.child});
+
+  /// Quanto o conteúdo desliza; maior para elementos grandes (capa do álbum).
+  final double distance;
+  const SharedAxisSwitcher({super.key, required this.index, required this.child, this.distance = 36});
 
   @override
   State<SharedAxisSwitcher> createState() => _SharedAxisSwitcherState();
 }
 
 class _SharedAxisSwitcherState extends State<SharedAxisSwitcher> {
-  static const _distance = 36.0;
   double _direction = 1;
 
   @override
@@ -153,7 +155,7 @@ class _SharedAxisSwitcherState extends State<SharedAxisSwitcher> {
           animation: slide,
           child: FadeTransition(opacity: opacity, child: child),
           builder: (context, c) => Transform.translate(
-            offset: Offset((incoming ? 1 : -1) * _direction * _distance * (1 - slide.value), 0),
+            offset: Offset((incoming ? 1 : -1) * _direction * widget.distance * (1 - slide.value), 0),
             child: c,
           ),
         );

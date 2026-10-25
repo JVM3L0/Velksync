@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -9,6 +9,7 @@ import '../services/agent_client.dart';
 import '../services/media_smoother.dart';
 import 'perf.dart';
 import 'theme.dart';
+import 'transitions.dart';
 
 String formatTime(int ms) {
   final s = (ms / 1000).floor();
@@ -40,6 +41,10 @@ class _MediaPanelState extends State<MediaPanel> {
   DateTime _lastVolumeSent = DateTime(0);
   bool _busy = false;
   late final _smoother = MediaSmoother(onChange: _shown);
+  int _trackIndex = 0; // muda a cada faixa; o sinal diz para que lado desliza
+  int _direction = 1; // 1 próxima, -1 anterior
+  double _dragDx = 0; // arrasto da capa com o dedo
+  bool _dragging = false;
 
   AgentClient get _c => widget.client;
 
@@ -107,16 +112,27 @@ class _MediaPanelState extends State<MediaPanel> {
     if (!mounted) return;
     final st = _smoother.shown;
     if (st == null) return;
+    var art = _art;
+    if (st.artId != _artId) {
+      // A capa nova chega antes de a faixa entrar na tela: assim ela já
+      // desliza com a capa certa, sem trocar de imagem no meio.
+      art = st.artId.isEmpty ? null : await _c.mediaArt().timeout(const Duration(seconds: 3), onTimeout: () => null);
+      if (!mounted || !identical(_smoother.shown, st)) return; // chegou estado mais novo
+    }
     setState(() {
       if (!identical(st, _state)) _stamp = DateTime.now();
+      final prev = _state;
+      if (prev != null && _trackKey(prev) != _trackKey(st)) {
+        _trackIndex += _direction;
+        _direction = 1; // trocas sem toque (fim da faixa) vêm "para a frente"
+      }
       _state = st;
-    });
-    if (st.artId != _artId) {
       _artId = st.artId;
-      final art = st.artId.isEmpty ? null : await _c.mediaArt();
-      if (mounted && _artId == st.artId) setState(() => _art = art);
-    }
+      _art = art;
+    });
   }
+
+  static String _trackKey(MediaState s) => s.available ? '${s.title}|${s.artist}|${s.album}' : '';
 
   int get _position {
     final st = _state;
@@ -155,6 +171,7 @@ class _MediaPanelState extends State<MediaPanel> {
   }
 
   void _skip(String action) {
+    _direction = action == 'previous' ? -1 : 1;
     _smoother.expectChange();
     _run(() => _c.mediaCommand(action));
   }
@@ -193,42 +210,8 @@ class _MediaPanelState extends State<MediaPanel> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
-        MediaCover(
-          art: st.available ? _art : null,
-          artId: _artId,
-          available: st.available,
-          playing: st.playing,
-          switching: _smoother.switching,
-        ),
-        const SizedBox(height: 24),
+        _track(st, scheme, text),
         if (st.available) ...[
-          // Durante a troca o título antigo fica esmaecido em vez de sumir.
-          AnimatedOpacity(
-            opacity: _smoother.switching ? 0.4 : 1,
-            duration: Motion.effectsDuration,
-            child: Column(
-              children: [
-                Text(
-                  st.title.isEmpty ? 'Sem título' : st.title,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                if (st.artist.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      st.artist,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                  ),
-              ],
-            ),
-          ),
           if (st.player.isNotEmpty) ...[
             const SizedBox(height: 12),
             Center(child: _playerChip(st.player, scheme, text)),
@@ -237,14 +220,72 @@ class _MediaPanelState extends State<MediaPanel> {
           _progress(st, scheme, text),
           const SizedBox(height: 8),
           _controls(st, scheme),
+        ],
+        if (st.volume != null) ...[const SizedBox(height: 28), _volume(st, scheme)],
+      ],
+    );
+  }
+
+  /// Capa e título da faixa. Desliza para o lado da troca (como Spotify e
+  /// YouTube Music) e dá para arrastar a capa para pular de faixa.
+  Widget _track(MediaState st, ColorScheme scheme, TextTheme text) {
+    final swipe = st.available && st.canControl;
+    final block = Column(
+      children: [
+        MediaCover(art: st.available ? _art : null, artId: _artId, available: st.available, playing: st.playing),
+        const SizedBox(height: 24),
+        if (st.available) ...[
+          Text(
+            st.title.isEmpty ? 'Sem título' : st.title,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          if (st.artist.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                st.artist,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ),
         ] else
           Text(
             'Nada tocando no PC',
             textAlign: TextAlign.center,
             style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
-        if (st.volume != null) ...[const SizedBox(height: 28), _volume(st, scheme)],
       ],
+    );
+    return GestureDetector(
+      onHorizontalDragStart: swipe ? (_) => setState(() => _dragging = true) : null,
+      // Com resistência: a capa acompanha o dedo, mas um pouco atrás.
+      onHorizontalDragUpdate: swipe ? (d) => setState(() => _dragDx += d.delta.dx * 0.6) : null,
+      onHorizontalDragEnd: swipe
+          ? (d) {
+              final v = d.primaryVelocity ?? 0;
+              final far = _dragDx.abs() > 72;
+              final toward = far ? _dragDx : v;
+              setState(() {
+                _dragging = false;
+                _dragDx = 0;
+              });
+              if (far || v.abs() > 700) {
+                HapticFeedback.selectionClick();
+                _skip(toward < 0 ? 'next' : 'previous');
+              }
+            }
+          : null,
+      child: AnimatedContainer(
+        duration: _dragging ? Duration.zero : Motion.spatialFastDuration,
+        curve: Motion.spatial,
+        transform: Matrix4.translationValues(_dragDx, 0, 0),
+        child: SharedAxisSwitcher(index: _trackIndex, distance: 160, child: block),
+      ),
     );
   }
 
@@ -434,17 +475,7 @@ class MediaCover extends StatelessWidget {
   final Uint8List? art;
   final String artId;
   final bool available, playing;
-
-  /// Trocando de faixa: escurece a capa e mostra uma forma girando.
-  final bool switching;
-  const MediaCover({
-    super.key,
-    this.art,
-    this.artId = '',
-    this.available = true,
-    this.playing = false,
-    this.switching = false,
-  });
+  const MediaCover({super.key, this.art, this.artId = '', this.available = true, this.playing = false});
 
   @override
   Widget build(BuildContext context) {
@@ -452,21 +483,7 @@ class MediaCover extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 360),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _art(scheme),
-              IgnorePointer(
-                child: AnimatedSwitcher(
-                  duration: Motion.effectsDuration,
-                  child: switching ? _SwitchingOverlay(key: const ValueKey('trocando')) : const SizedBox.shrink(),
-                ),
-              ),
-            ],
-          ),
-        ),
+        child: AspectRatio(aspectRatio: 1, child: _art(scheme)),
       ),
     );
   }
@@ -507,49 +524,4 @@ class MediaCover extends StatelessWidget {
             ),
           ),
   );
-}
-
-/// Capa escurecida com uma forma expressiva girando, enquanto a faixa troca.
-class _SwitchingOverlay extends StatefulWidget {
-  const _SwitchingOverlay({super.key});
-
-  @override
-  State<_SwitchingOverlay> createState() => _SwitchingOverlayState();
-}
-
-class _SwitchingOverlayState extends State<_SwitchingOverlay> with SingleTickerProviderStateMixin {
-  late final _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
-
-  @override
-  void dispose() {
-    _spin.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.scrim.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(Radii.xl),
-      ),
-      // Só a forma gira; a nota fica parada no meio.
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          RotationTransition(
-            turns: _spin,
-            child: MorphingShape(
-              shape: LoadShape.softBurst,
-              color: scheme.primaryContainer,
-              size: 88,
-              child: const SizedBox.shrink(),
-            ),
-          ),
-          Icon(Symbols.music_note_rounded, size: 36, fill: 1, color: scheme.onPrimaryContainer),
-        ],
-      ),
-    );
-  }
 }
