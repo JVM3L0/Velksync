@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/device.dart';
 import '../services/agent_client.dart';
+import '../services/media_smoother.dart';
 import 'perf.dart';
 import 'theme.dart';
 
@@ -38,6 +39,7 @@ class _MediaPanelState extends State<MediaPanel> {
   double? _dragPosition, _dragVolume;
   DateTime _lastVolumeSent = DateTime(0);
   bool _busy = false;
+  late final _smoother = MediaSmoother(onChange: _shown);
 
   AgentClient get _c => widget.client;
 
@@ -61,6 +63,7 @@ class _MediaPanelState extends State<MediaPanel> {
     _tick?.cancel();
     _retryLive?.cancel();
     _live?.cancel();
+    _smoother.dispose();
     super.dispose();
   }
 
@@ -89,17 +92,24 @@ class _MediaPanelState extends State<MediaPanel> {
 
   Future<void> _refresh() async {
     try {
-      await _apply(await _c.media());
+      _apply(await _c.media());
     } on AgentException {
       // queda momentânea: mantém o último estado
     }
   }
 
-  Future<void> _apply(MediaState st) async {
+  void _apply(MediaState st) {
+    if (mounted) _smoother.push(st);
+  }
+
+  /// O que o [MediaSmoother] decidiu mostrar (segura a faixa durante a troca).
+  Future<void> _shown() async {
     if (!mounted) return;
+    final st = _smoother.shown;
+    if (st == null) return;
     setState(() {
+      if (!identical(st, _state)) _stamp = DateTime.now();
       _state = st;
-      _stamp = DateTime.now();
     });
     if (st.artId != _artId) {
       _artId = st.artId;
@@ -144,6 +154,11 @@ class _MediaPanelState extends State<MediaPanel> {
     _run(() => _c.mediaCommand('play_pause'));
   }
 
+  void _skip(String action) {
+    _smoother.expectChange();
+    _run(() => _c.mediaCommand(action));
+  }
+
   Map<String, dynamic> _json(MediaState s) => {
     'available': s.available,
     'player': s.player,
@@ -178,27 +193,42 @@ class _MediaPanelState extends State<MediaPanel> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
-        MediaCover(art: st.available ? _art : null, artId: _artId, available: st.available, playing: st.playing),
+        MediaCover(
+          art: st.available ? _art : null,
+          artId: _artId,
+          available: st.available,
+          playing: st.playing,
+          switching: _smoother.switching,
+        ),
         const SizedBox(height: 24),
         if (st.available) ...[
-          Text(
-            st.title.isEmpty ? 'Sem título' : st.title,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          if (st.artist.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                st.artist,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
-              ),
+          // Durante a troca o título antigo fica esmaecido em vez de sumir.
+          AnimatedOpacity(
+            opacity: _smoother.switching ? 0.4 : 1,
+            duration: Motion.effectsDuration,
+            child: Column(
+              children: [
+                Text(
+                  st.title.isEmpty ? 'Sem título' : st.title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                if (st.artist.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      st.artist,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
+                  ),
+              ],
             ),
+          ),
           if (st.player.isNotEmpty) ...[
             const SizedBox(height: 12),
             Center(child: _playerChip(st.player, scheme, text)),
@@ -278,7 +308,7 @@ class _MediaPanelState extends State<MediaPanel> {
           tooltip: 'Anterior',
           iconSize: 30,
           style: IconButton.styleFrom(minimumSize: const Size(64, 64)),
-          onPressed: enabled ? () => _run(() => _c.mediaCommand('previous')) : null,
+          onPressed: enabled ? () => _skip('previous') : null,
           icon: const Icon(Symbols.skip_previous_rounded, fill: 1),
         ),
         const SizedBox(width: 20),
@@ -288,7 +318,7 @@ class _MediaPanelState extends State<MediaPanel> {
           tooltip: 'Próxima',
           iconSize: 30,
           style: IconButton.styleFrom(minimumSize: const Size(64, 64)),
-          onPressed: enabled ? () => _run(() => _c.mediaCommand('next')) : null,
+          onPressed: enabled ? () => _skip('next') : null,
           icon: const Icon(Symbols.skip_next_rounded, fill: 1),
         ),
       ],
@@ -404,7 +434,17 @@ class MediaCover extends StatelessWidget {
   final Uint8List? art;
   final String artId;
   final bool available, playing;
-  const MediaCover({super.key, this.art, this.artId = '', this.available = true, this.playing = false});
+
+  /// Trocando de faixa: escurece a capa e mostra uma forma girando.
+  final bool switching;
+  const MediaCover({
+    super.key,
+    this.art,
+    this.artId = '',
+    this.available = true,
+    this.playing = false,
+    this.switching = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -414,46 +454,101 @@ class MediaCover extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 360),
         child: AspectRatio(
           aspectRatio: 1,
-          child: AnimatedSwitcher(
-            duration: Motion.spatialDuration,
-            switchInCurve: Motion.effects,
-            // O AnimatedSwitcher dá restrições frouxas: sem o SizedBox.expand
-            // a capa (o Windows manda 120 px) ficava no tamanho natural, minúscula.
-            child: art != null
-                ? SizedBox.expand(
-                    key: ValueKey(artId),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(Radii.xl),
-                      child: Image.memory(
-                        art!,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                        // Ampliada ~3x: suaviza em vez de pixelar.
-                        filterQuality: FilterQuality.medium,
-                      ),
-                    ),
-                  )
-                : Container(
-                    key: const ValueKey('sem-capa'),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(Radii.xl),
-                    ),
-                    child: Center(
-                      child: MorphingShape(
-                        shape: playing ? LoadShape.sunny : LoadShape.cookie4,
-                        color: scheme.secondaryContainer,
-                        size: 140,
-                        child: Icon(
-                          available ? Symbols.music_note_rounded : Symbols.music_off_rounded,
-                          size: 56,
-                          color: scheme.onSecondaryContainer,
-                        ),
-                      ),
-                    ),
-                  ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _art(scheme),
+              IgnorePointer(
+                child: AnimatedSwitcher(
+                  duration: Motion.effectsDuration,
+                  child: switching ? _SwitchingOverlay(key: const ValueKey('trocando')) : const SizedBox.shrink(),
+                ),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _art(ColorScheme scheme) => AnimatedSwitcher(
+    duration: Motion.spatialDuration,
+    switchInCurve: Motion.effects,
+    // O AnimatedSwitcher dá restrições frouxas: sem o SizedBox.expand
+    // a capa (o Windows manda 120 px) ficava no tamanho natural, minúscula.
+    child: art != null
+        ? SizedBox.expand(
+            key: ValueKey(artId),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(Radii.xl),
+              child: Image.memory(
+                art!,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                // Ampliada ~3x: suaviza em vez de pixelar.
+                filterQuality: FilterQuality.medium,
+              ),
+            ),
+          )
+        : Container(
+            key: const ValueKey('sem-capa'),
+            decoration: BoxDecoration(color: scheme.surfaceContainer, borderRadius: BorderRadius.circular(Radii.xl)),
+            child: Center(
+              child: MorphingShape(
+                shape: playing ? LoadShape.sunny : LoadShape.cookie4,
+                color: scheme.secondaryContainer,
+                size: 140,
+                child: Icon(
+                  available ? Symbols.music_note_rounded : Symbols.music_off_rounded,
+                  size: 56,
+                  color: scheme.onSecondaryContainer,
+                ),
+              ),
+            ),
+          ),
+  );
+}
+
+/// Capa escurecida com uma forma expressiva girando, enquanto a faixa troca.
+class _SwitchingOverlay extends StatefulWidget {
+  const _SwitchingOverlay({super.key});
+
+  @override
+  State<_SwitchingOverlay> createState() => _SwitchingOverlayState();
+}
+
+class _SwitchingOverlayState extends State<_SwitchingOverlay> with SingleTickerProviderStateMixin {
+  late final _spin = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.scrim.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(Radii.xl),
+      ),
+      // Só a forma gira; a nota fica parada no meio.
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          RotationTransition(
+            turns: _spin,
+            child: MorphingShape(
+              shape: LoadShape.softBurst,
+              color: scheme.primaryContainer,
+              size: 88,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+          Icon(Symbols.music_note_rounded, size: 36, fill: 1, color: scheme.onPrimaryContainer),
+        ],
       ),
     );
   }

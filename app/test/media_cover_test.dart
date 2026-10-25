@@ -20,7 +20,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SizedBox(width: 400, child: MediaCover(art: png, artId: 'a')),
+          body: SizedBox(
+            width: 400,
+            child: MediaCover(art: png, artId: 'a'),
+          ),
         ),
       ),
     );
@@ -28,5 +31,24 @@ void main() {
     final cover = tester.getSize(find.byType(Image));
     expect(cover.width, 360, reason: 'antes ficava em 120, minúscula no meio');
     expect(cover.height, 360);
+  });
+
+  testWidgets('trocando de faixa: capa fica e a forma gira por cima', (tester) async {
+    final png = (await tester.runAsync(smallPng))!;
+    Widget cover(bool switching) => MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 400,
+          child: MediaCover(art: png, artId: 'a', switching: switching),
+        ),
+      ),
+    );
+    await tester.pumpWidget(cover(true));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(Image), findsOneWidget, reason: 'a capa antiga continua visível');
+    expect(find.byKey(const ValueKey('trocando')), findsOneWidget);
+    await tester.pumpWidget(cover(false));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const ValueKey('trocando')), findsNothing);
   });
 }
