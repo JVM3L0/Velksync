@@ -4,10 +4,15 @@ O que falta até a v0.4.0 e o que fica para depois. Cada item tem o problema,
 a mudança, os casos de uso e os testes. Mudanças de tela passam por uma
 proposta antes de implementar.
 
-Feito: gráficos do desempenho (histórico de 2 min guardado na tela do PC,
-aberto ao tocar nos cartões de CPU, GPU e memória).
+Feito:
+- Gráficos do desempenho (histórico de 2 min guardado na tela do PC, aberto
+  ao tocar nos cartões de CPU, GPU e memória).
+- Revisão de UI: energia conforme o estado do PC, comemoração ao ligar,
+  números de largura fixa, cartão da CPU sem espaço vazio.
+- Itens 1 (troca de faixa rápida no agente, limite de 3 canais) e 2 (cache
+  de capas). O agente precisa ser reinstalado para o item 1 valer.
 
-## 1. Troca de faixa quase instantânea (agente)
+## 1. ~~Troca de faixa quase instantânea (agente)~~ feito
 
 **Problema.** O canal ao vivo lê o player uma vez por segundo; depois de um
 "próxima", a faixa nova pode levar até ~1 s para chegar ao app.
@@ -32,7 +37,7 @@ de desempenho aberto em todas as abas; com a mídia são dois, e trocar de aba
 rápido pode esbarrar no limite enquanto o agente ainda fecha o canal antigo
 (o app cai para consulta e volta em 15 s, sem quebrar).
 
-## 2. Cache de capas (app)
+## 2. ~~Cache de capas (app)~~ feito
 
 **Mudança.** `app/lib/services/art_cache.dart`: as últimas 20 capas com
 formato e cores já calculados, por `art_id`, só na memória. Usado em
