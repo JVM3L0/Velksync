@@ -17,10 +17,13 @@ void main() {
   testWidgets('reenvia o sinal e para quando o PC aparece aguardando login', (tester) async {
     var sends = 0, probes = 0;
     var answer = const PcState.offline();
-    final t = WakeTracker(send: (_) async => sends++, probe: (_) async {
-      probes++;
-      return answer;
-    });
+    final t = WakeTracker(
+      send: (_) async => sends++,
+      probe: (_) async {
+        probes++;
+        return answer;
+      },
+    );
     addTearDown(t.dispose);
 
     await t.start(pc);
@@ -62,9 +65,12 @@ void main() {
   });
 
   testWidgets('erro no primeiro envio chega a quem chamou', (tester) async {
-    final t = WakeTracker(send: (_) async => throw const FormatException('MAC inválido'), probe: (_) async {
-      throw AgentException('não deveria perguntar');
-    });
+    final t = WakeTracker(
+      send: (_) async => throw const FormatException('MAC inválido'),
+      probe: (_) async {
+        throw AgentException('não deveria perguntar');
+      },
+    );
     addTearDown(t.dispose);
     await expectLater(t.start(pc), throwsFormatException);
     expect(t.of('pc'), isNull);
