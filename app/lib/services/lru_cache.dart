@@ -1,4 +1,3 @@
-
 /// Cache pequeno na memória que descarta o item usado há mais tempo.
 class LruCache<K, V> {
   LruCache(this.capacity) : assert(capacity > 0);

@@ -2,12 +2,15 @@ package com.velksync.velksync
 
 import org.json.JSONObject
 
+/** O que o botão do widget faz. */
+enum class WidgetAction { WAKE, SHUTDOWN, NONE }
+
 /** O que o widget mostra; separado do Android para ser testável. */
 data class WidgetView(
     val deviceId: String?,
     val title: String,
     val status: String,
-    val canWake: Boolean,
+    val action: WidgetAction,
     val waking: Boolean,
 )
 
@@ -33,7 +36,7 @@ object WakeWidgetModel {
         val d = devices.firstOrNull { it.id == chosen }
             ?: devices.firstOrNull { it.mac != null }
             ?: devices.firstOrNull()
-            ?: return WidgetView(null, "Adicionar PC", "Toque para abrir o Velksync", canWake = false, waking = false)
+            ?: return WidgetView(null, "Adicionar PC", "Toque para abrir o Velksync", WidgetAction.NONE, waking = false)
         val st = runCatching { JSONObject(stateJson ?: "{}").optJSONObject(d.id) }.getOrNull()
         val power = st?.optString("power").orEmpty()
         val at = st?.optLong("at") ?: 0L
@@ -48,6 +51,14 @@ object WakeWidgetModel {
             power == "awaitingLogin" -> "Aguardando login · visto ${time(at)}"
             else -> "○ Desligado · visto ${time(at)}"
         }
-        return WidgetView(d.id, d.name, status, canWake = d.mac != null && !on && !waking, waking = waking)
+        // Ligado: desligar (o app confirma e confere o estado de verdade).
+        // Aguardando login: o agente não roda, então não há o que fazer daqui.
+        val action = when {
+            waking -> WidgetAction.NONE
+            power == "online" -> WidgetAction.SHUTDOWN
+            !on && d.mac != null -> WidgetAction.WAKE
+            else -> WidgetAction.NONE
+        }
+        return WidgetView(d.id, d.name, status, action, waking = waking)
     }
 }

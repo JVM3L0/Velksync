@@ -94,18 +94,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) setState(() {});
     _start();
     // Toque no widget: abre direto a tela daquele PC.
-    WidgetBridge.onOpenDevice(_openById);
-    final launched = await WidgetBridge.takeLaunchDevice();
-    if (launched != null) _openById(launched);
+    WidgetBridge.onOpen(_openFromWidget);
+    if (await WidgetBridge.takeLaunch() case final launch?) _openFromWidget(launch);
   }
 
-  void _openById(String id) {
+  /// Abre a tela do PC tocado no widget; o botão de desligar abre já
+  /// perguntando "Desligar?" (a tela confere antes se o PC está ligado).
+  void _openFromWidget(WidgetLaunch launch) {
     if (!mounted) return;
-    final d = _devices.where((x) => x.id == id).firstOrNull;
+    final d = _devices.where((x) => x.id == launch.device).firstOrNull;
     if (d == null) return; // id que não é nosso (outro app pode abrir a activity)
     Navigator.of(context).popUntil((r) => r.isFirst);
-    Navigator.push(context, MaterialPageRoute(builder: (_) => DeviceScreen(device: d, onEdit: () => _edit(d))))
-        .then((_) => _refresh());
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DeviceScreen(device: d, onEdit: () => _edit(d), confirmShutdown: launch.action == 'shutdown'),
+      ),
+    ).then((_) => _refresh());
   }
 
   void _start() {

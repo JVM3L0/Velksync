@@ -6,6 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'pc_probe.dart';
 
+/// Toque no widget: qual PC e, se foi o botão de desligar, `shutdown`.
+typedef WidgetLaunch = ({String device, String? action});
+
+WidgetLaunch? _launchOf(Object? args) {
+  if (args is! Map || args['device'] is! String) return null;
+  return (device: args['device'] as String, action: args['action'] as String?);
+}
+
 /// Ponte com o widget "Ligar PC" do Android. O app grava o último estado que
 /// viu de cada PC (o widget não pergunta ao PC) e pede para ele se redesenhar;
 /// do outro lado, um toque no widget abre a tela daquele PC.
@@ -60,21 +68,22 @@ class WidgetBridge {
     }
   }
 
-  /// PC tocado no widget que abriu o app (uma vez só).
-  static Future<String?> takeLaunchDevice() async {
+  /// Toque no widget que abriu o app (uma vez só).
+  static Future<WidgetLaunch?> takeLaunch() async {
     if (!_android) return null;
     try {
-      return await _channel.invokeMethod<String>('takeLaunchDevice');
+      return _launchOf(await _channel.invokeMethod<Object?>('takeLaunch'));
     } on MissingPluginException {
       return null;
     }
   }
 
   /// Toque no widget com o app já aberto.
-  static void onOpenDevice(void Function(String deviceId) open) {
+  static void onOpen(void Function(WidgetLaunch launch) open) {
     if (!_android) return;
     _channel.setMethodCallHandler((call) async {
-      if (call.method == 'openDevice' && call.arguments is String) open(call.arguments as String);
+      if (call.method != 'open') return;
+      if (_launchOf(call.arguments) case final launch?) open(launch);
     });
   }
 }

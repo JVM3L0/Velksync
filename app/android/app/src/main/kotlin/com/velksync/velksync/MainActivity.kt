@@ -7,11 +7,11 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
-    private var launchDevice: String? = null // PC tocado no widget, até o app pegar
+    private var launch: Map<String, String?>? = null // toque no widget, até o app pegar
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        launchDevice = intent?.getStringExtra(WakeWidget.EXTRA_DEVICE)
+        launch = intent?.let(::fromWidget)
         channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "velksync/widget").apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -19,9 +19,9 @@ class MainActivity : FlutterActivity() {
                         WakeWidget.refresh(this@MainActivity)
                         result.success(null)
                     }
-                    "takeLaunchDevice" -> {
-                        result.success(launchDevice)
-                        launchDevice = null
+                    "takeLaunch" -> {
+                        result.success(launch)
+                        launch = null
                     }
                     else -> result.notImplemented()
                 }
@@ -32,6 +32,13 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(WakeWidget.EXTRA_DEVICE)?.let { channel?.invokeMethod("openDevice", it) }
+        fromWidget(intent)?.let { channel?.invokeMethod("open", it) }
+    }
+
+    /** PC e ação pedidos pelo widget. Qualquer app pode abrir esta activity: o
+     *  app só navega e sempre pede confirmação antes de desligar. */
+    private fun fromWidget(intent: Intent): Map<String, String?>? {
+        val id = intent.getStringExtra(WakeWidget.EXTRA_DEVICE) ?: return null
+        return mapOf("device" to id, "action" to intent.getStringExtra(WakeWidget.EXTRA_ACTION))
     }
 }

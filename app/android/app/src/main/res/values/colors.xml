@@ -9,4 +9,6 @@
     <color name="widget_button">#FF6750A4</color>
     <color name="widget_on_button">#FFFFFFFF</color>
     <color name="widget_button_off">#FFE6E0E9</color>
+    <color name="widget_button_danger">#FFF9DEDC</color>
+    <color name="widget_on_button_danger">#FF8C1D18</color>
 </resources>

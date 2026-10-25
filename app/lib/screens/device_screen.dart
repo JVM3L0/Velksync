@@ -21,7 +21,11 @@ import 'terminal_screen.dart';
 class DeviceScreen extends StatefulWidget {
   final Device device;
   final VoidCallback onEdit;
-  const DeviceScreen({super.key, required this.device, required this.onEdit});
+
+  /// Veio do botão "desligar" do widget: ao confirmar que o PC está ligado,
+  /// pergunta "Desligar?" (o widget mostra um estado que pode estar velho).
+  final bool confirmShutdown;
+  const DeviceScreen({super.key, required this.device, required this.onEdit, this.confirmShutdown = false});
 
   @override
   State<DeviceScreen> createState() => _DeviceScreenState();
@@ -41,6 +45,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   Timer? _poll;
   Timer? _statsPoll;
   StreamSubscription<PcStats>? _liveStats; // agente com "live": ele empurra os stats
+  late bool _pendingShutdown = widget.confirmShutdown;
 
   @override
   void initState() {
@@ -104,6 +109,14 @@ class _DeviceScreenState extends State<DeviceScreen> {
       _checked = true;
     });
     _syncLiveStats();
+    if (_pendingShutdown) {
+      _pendingShutdown = false;
+      if (state.info != null) {
+        _power('shutdown', 'Desligar');
+      } else {
+        _snack('${widget.device.name} já não está ligado');
+      }
+    }
   }
 
   void _gotStats(PcStats s) {

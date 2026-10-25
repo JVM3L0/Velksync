@@ -8,4 +8,6 @@
     <color name="widget_button">#FFD0BCFF</color>
     <color name="widget_on_button">#FF381E72</color>
     <color name="widget_button_off">#FF36343B</color>
+    <color name="widget_button_danger">#FF8C1D18</color>
+    <color name="widget_on_button_danger">#FFF9DEDC</color>
 </resources>

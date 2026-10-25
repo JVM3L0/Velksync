@@ -8,4 +8,6 @@
     <color name="widget_button">@android:color/system_accent1_200</color>
     <color name="widget_on_button">@android:color/system_accent1_800</color>
     <color name="widget_button_off">@android:color/system_neutral2_800</color>
+    <color name="widget_button_danger">#FF8C1D18</color>
+    <color name="widget_on_button_danger">#FFF9DEDC</color>
 </resources>

@@ -29,6 +29,7 @@ class WakeWidgetReceiver : BroadcastReceiver() {
 object WakeWidget {
     const val ACTION_REFRESH = "com.velksync.velksync.widget.REFRESH"
     const val EXTRA_DEVICE = "device_id"
+    const val EXTRA_ACTION = "action" // "shutdown": o app abre já no "Desligar?"
 
     private fun local(context: Context) = context.getSharedPreferences("velksync_widget", Context.MODE_PRIVATE)
 
@@ -73,13 +74,25 @@ object WakeWidget {
         rv.setViewVisibility(R.id.widget_progress, if (view.waking) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.widget_icon, if (view.deviceId == null) View.GONE else View.VISIBLE)
         if (view.deviceId == null) rv.setViewVisibility(R.id.widget_power, View.GONE)
-        rv.setBoolean(R.id.widget_power, "setEnabled", view.canWake)
-        rv.setInt(R.id.widget_power, "setImageAlpha", if (view.canWake) 255 else 97)
+        val active = view.action != WidgetAction.NONE
+        rv.setBoolean(R.id.widget_power, "setEnabled", active)
+        rv.setInt(R.id.widget_power, "setImageAlpha", if (active) 255 else 97)
         rv.setInt(
             R.id.widget_power, "setBackgroundResource",
-            if (view.canWake) R.drawable.widget_button_bg else R.drawable.widget_button_bg_off,
+            when (view.action) {
+                WidgetAction.WAKE -> R.drawable.widget_button_bg
+                WidgetAction.SHUTDOWN -> R.drawable.widget_button_bg_danger
+                WidgetAction.NONE -> R.drawable.widget_button_bg_off
+            },
         )
-        rv.setContentDescription(R.id.widget_power, "Ligar ${view.title}")
+        rv.setInt(
+            R.id.widget_power, "setColorFilter",
+            context.getColor(if (view.action == WidgetAction.SHUTDOWN) R.color.widget_on_button_danger else R.color.widget_on_button),
+        )
+        rv.setContentDescription(
+            R.id.widget_power,
+            if (view.action == WidgetAction.SHUTDOWN) "Desligar ${view.title}" else "Ligar ${view.title}",
+        )
 
         // Toque no widget: abre o app direto na tela do PC.
         val open = Intent(context, MainActivity::class.java)
@@ -91,7 +104,7 @@ object WakeWidget {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         rv.setOnClickPendingIntent(R.id.widget_root, openPi)
-        if (view.canWake && view.deviceId != null) {
+        if (view.action == WidgetAction.WAKE && view.deviceId != null) {
             // Ligar pede confirmação, como no app.
             val confirm = Intent(context, ConfirmWakeActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
@@ -99,6 +112,13 @@ object WakeWidget {
             rv.setOnClickPendingIntent(
                 R.id.widget_power,
                 PendingIntent.getActivity(context, 1, confirm, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+            )
+        } else if (view.action == WidgetAction.SHUTDOWN) {
+            // Desligar passa pelo app: ele tem a credencial e pergunta antes.
+            val shutdown = Intent(open).putExtra(EXTRA_ACTION, "shutdown")
+            rv.setOnClickPendingIntent(
+                R.id.widget_power,
+                PendingIntent.getActivity(context, 3, shutdown, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
             )
         } else {
             rv.setOnClickPendingIntent(R.id.widget_power, openPi)

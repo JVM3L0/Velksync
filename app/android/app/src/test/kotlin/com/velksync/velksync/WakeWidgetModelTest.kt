@@ -18,22 +18,27 @@ class WakeWidgetModelTest {
     private fun build(chosen: String?, wakeAt: Long = 0L, now: Long = seen + 60_000, st: String? = state) =
         WakeWidgetModel.build(devices, chosen, st, { wakeAt }, now, time)
 
-    @Test fun ligadoComBotaoApagado() {
+    @Test fun ligadoOfereceDesligar() {
         val v = build("pc1")
         assertEquals("Velkhyro", v.title)
         assertEquals("● Ligado · visto às 16:40", v.status)
-        assertFalse(v.canWake)
+        assertEquals(WidgetAction.SHUTDOWN, v.action)
+    }
+
+    @Test fun aguardandoLoginNaoTemAcao() {
+        val v = build("pc1", st = state.replace("\"online\"", "\"awaitingLogin\""))
+        assertEquals(WidgetAction.NONE, v.action)
     }
 
     @Test fun desligadoSemMacNaoLiga() {
         val v = build("pc2")
         assertEquals("○ Desligado · visto às 16:40", v.status)
-        assertFalse("sem MAC não há como ligar", v.canWake)
+        assertEquals("sem MAC não há como ligar", WidgetAction.NONE, v.action)
     }
 
     @Test fun desligadoComMacLiga() {
         val off = state.replace("\"online\"", "\"offline\"")
-        assertTrue(build("pc1", st = off).canWake)
+        assertEquals(WidgetAction.WAKE, build("pc1", st = off).action)
     }
 
     @Test fun sinalEnviadoMostraEsperaAteOAppVerOPcLigado() {
@@ -42,6 +47,7 @@ class WakeWidgetModelTest {
         val v = build("pc1", wakeAt = sent, now = sent + 10_000, st = off)
         assertTrue(v.waking)
         assertEquals("Sinal enviado às 16:45", v.status)
+        assertEquals(WidgetAction.NONE, v.action)
         val later = build("pc1", wakeAt = sent, now = sent + WakeWidgetModel.WAKE_WINDOW_MS + 1, st = off)
         assertFalse("depois de 2 min volta ao normal", later.waking)
     }
