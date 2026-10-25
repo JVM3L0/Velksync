@@ -3,6 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+- Aviso na aba Controle quando app e agente estão em versões diferentes, com
+  o passo a passo de atualização do sistema daquele PC.
+- CI a cada envio (testes, análise e formatação) e Dependabot semanal.
+
+### Alterado
+- Release publica um APK por processador (~25 MB em vez de ~72 MB).
+- O app de desenvolvimento é o "Velksync Dev" (`com.velksync.velksync.debug`)
+  e convive com o da release.
+
 ## [0.4.0] - 2026-10-25
 
 ### Adicionado
@@ -44,7 +56,6 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 - Capa do álbum minúscula; painel de agendamento cortado em telas pequenas.
 - "Nada tocando" piscando entre faixas; barra de progresso correndo durante
   a troca de faixa.
-- Nome do celular com a marca repetida ao parear.
 
 ## [0.3.0] - 2026-10-25
 
@@ -66,6 +77,7 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 ## [0.2.0]
 
 - HTTPS com certificado fixado e credenciais por celular, revogáveis.
+- Nome do celular sem a marca repetida ao parear.
 
 ## [0.1.0]
 
