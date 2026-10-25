@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -82,6 +83,31 @@ class AgentClient {
 
   Future<PcStats> stats() async =>
       PcStats.fromJson(await _send('GET', '/api/stats', timeout: const Duration(seconds: 3)) as Map<String, dynamic>);
+
+  Future<MediaState> media() async => MediaState.fromJson(
+    await _send('GET', '/api/media', timeout: const Duration(seconds: 4)) as Map<String, dynamic>,
+  );
+
+  /// Capa do que está tocando, pela mesma conexão fixada (por isso não usa
+  /// Image.network, que não teria o pin).
+  Future<Uint8List?> mediaArt() async {
+    if (device.pin.isEmpty) return null;
+    final req = http.Request('GET', _uri('/api/media/art'))..headers.addAll(_headers);
+    try {
+      final res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 6)));
+      return res.statusCode == 200 && res.bodyBytes.length <= 5 << 20 ? res.bodyBytes : null;
+    } on Exception {
+      return null;
+    }
+  }
+
+  /// action: play_pause, next ou previous.
+  Future<void> mediaCommand(String action) => _send('POST', '/api/media/$action');
+
+  Future<void> mediaSeek(int positionMs) => _send('POST', '/api/media/seek', body: {'position_ms': positionMs});
+
+  Future<void> mediaVolume({double? volume, bool? muted}) =>
+      _send('POST', '/api/media/volume', body: {'volume': ?volume?.clamp(0.0, 1.0), 'muted': ?muted});
 
   /// action: shutdown, reboot ou sleep.
   Future<void> power(String action) => _send('POST', '/api/power', body: {'action': action});

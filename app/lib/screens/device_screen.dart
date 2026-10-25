@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../models/device.dart';
 import '../services/agent_client.dart';
 import '../services/wol.dart';
+import '../ui/media_panel.dart';
 import '../ui/perf.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -27,6 +28,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   List<PresetCommand> _commands = [];
   String? _running;
   PcStats? _stats;
+  int _tab = 0; // 0 controle, 1 desempenho, 2 mídia
   Timer? _poll;
   Timer? _statsPoll;
 
@@ -49,6 +51,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   }
 
   Future<void> _refreshStats() async {
+    if (_tab != 1) return; // só consulta com a aba visível
     if (_info == null) {
       if (_stats != null) setState(() => _stats = null);
       return;
@@ -151,75 +154,121 @@ class _DeviceScreenState extends State<DeviceScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          children: [
-            _hero(status),
-            const SectionLabel('Energia'),
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.35,
-              children: [
-                MorphTile(
-                  icon: Symbols.power_settings_new_rounded,
-                  label: 'Ligar',
-                  color: scheme.primary,
-                  onColor: scheme.onPrimary,
-                  onTap: !online && d.mac.isNotEmpty ? _wake : null,
-                ),
-                MorphTile(
-                  icon: Symbols.power_off_rounded,
-                  label: 'Desligar',
-                  color: Color.alphaBlend(scheme.error.withValues(alpha: 0.16), scheme.surfaceContainer),
-                  onColor: scheme.error,
-                  onTap: online ? () => _power('shutdown', 'Desligar') : null,
-                ),
-                MorphTile(
-                  icon: Symbols.restart_alt_rounded,
-                  label: 'Reiniciar',
-                  color: scheme.secondaryContainer,
-                  onColor: scheme.onSecondaryContainer,
-                  onTap: online ? () => _power('reboot', 'Reiniciar') : null,
-                ),
-                MorphTile(
-                  icon: Symbols.bedtime_rounded,
-                  label: 'Suspender',
-                  color: scheme.tertiaryContainer,
-                  onColor: scheme.onTertiaryContainer,
-                  onTap: online ? () => _power('sleep', 'Suspender') : null,
-                ),
-              ],
-            ),
-            if (d.mac.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
-                child: Text(
-                  'Sem MAC salvo: abra o app com o PC ligado uma vez para habilitar "Ligar".',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ),
-            AnimatedSize(
-              duration: Motion.spatialDuration,
-              curve: Motion.spatial,
-              alignment: Alignment.topCenter,
-              child: online && _stats != null ? _performanceSection(_stats!) : const SizedBox(width: double.infinity),
-            ),
-            AnimatedSize(
-              duration: Motion.spatialDuration,
-              curve: Motion.spatial,
-              alignment: Alignment.topCenter,
-              child: online ? _commandsSection() : const SizedBox(width: double.infinity),
-            ),
-          ],
+      body: AnimatedSwitcher(
+        duration: Motion.spatialDuration,
+        switchInCurve: Motion.effects,
+        transitionBuilder: (child, a) => FadeTransition(
+          opacity: a,
+          child: ScaleTransition(scale: Tween(begin: 0.97, end: 1.0).animate(a), child: child),
+        ),
+        child: KeyedSubtree(
+          key: ValueKey(online ? _tab : 0),
+          child: switch (online ? _tab : 0) {
+            1 => _performanceTab(),
+            2 => MediaPanel(client: _client),
+            _ => _controlTab(d, status, online, scheme),
+          },
         ),
       ),
+      // Abas só com o PC respondendo: desempenho e mídia dependem do agente.
+      bottomNavigationBar: online
+          ? NavigationBar(
+              selectedIndex: _tab,
+              onDestinationSelected: (i) {
+                setState(() => _tab = i);
+                if (i == 1) _refreshStats();
+              },
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Symbols.power_settings_new_rounded),
+                  selectedIcon: Icon(Symbols.power_settings_new_rounded, fill: 1),
+                  label: 'Controle',
+                ),
+                NavigationDestination(
+                  icon: Icon(Symbols.monitoring_rounded),
+                  selectedIcon: Icon(Symbols.monitoring_rounded, fill: 1),
+                  label: 'Desempenho',
+                ),
+                NavigationDestination(
+                  icon: Icon(Symbols.music_note_rounded),
+                  selectedIcon: Icon(Symbols.music_note_rounded, fill: 1),
+                  label: 'Mídia',
+                ),
+              ],
+            )
+          : null,
     );
+  }
+
+  Widget _controlTab(Device d, PcStatus status, bool online, ColorScheme scheme) {
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          _hero(status),
+          const SectionLabel('Energia'),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.35,
+            children: [
+              MorphTile(
+                icon: Symbols.power_settings_new_rounded,
+                label: 'Ligar',
+                color: scheme.primary,
+                onColor: scheme.onPrimary,
+                onTap: !online && d.mac.isNotEmpty ? _wake : null,
+              ),
+              MorphTile(
+                icon: Symbols.power_off_rounded,
+                label: 'Desligar',
+                color: Color.alphaBlend(scheme.error.withValues(alpha: 0.16), scheme.surfaceContainer),
+                onColor: scheme.error,
+                onTap: online ? () => _power('shutdown', 'Desligar') : null,
+              ),
+              MorphTile(
+                icon: Symbols.restart_alt_rounded,
+                label: 'Reiniciar',
+                color: scheme.secondaryContainer,
+                onColor: scheme.onSecondaryContainer,
+                onTap: online ? () => _power('reboot', 'Reiniciar') : null,
+              ),
+              MorphTile(
+                icon: Symbols.bedtime_rounded,
+                label: 'Suspender',
+                color: scheme.tertiaryContainer,
+                onColor: scheme.onTertiaryContainer,
+                onTap: online ? () => _power('sleep', 'Suspender') : null,
+              ),
+            ],
+          ),
+          if (d.mac.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+              child: Text(
+                'Sem MAC salvo: abra o app com o PC ligado uma vez para habilitar "Ligar".',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ),
+          AnimatedSize(
+            duration: Motion.spatialDuration,
+            curve: Motion.spatial,
+            alignment: Alignment.topCenter,
+            child: online ? _commandsSection() : const SizedBox(width: double.infinity),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _performanceTab() {
+    final s = _stats;
+    if (s == null) return const Center(child: CircularProgressIndicator());
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), children: [_performanceSection(s)]);
   }
 
   Widget _hero(PcStatus status) {

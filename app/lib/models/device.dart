@@ -175,3 +175,30 @@ class GpuStats {
 
   double get vramFraction => vramTotal == 0 ? 0 : vramUsed / vramTotal;
 }
+
+/// O que está tocando no PC (GET /api/media).
+class MediaState {
+  final bool available;
+  final String player, status, title, artist, album, artId;
+  final int positionMs, durationMs;
+  final bool canSeek, canControl;
+  final double? volume;
+  final bool? muted;
+
+  MediaState.fromJson(Map<String, dynamic> j)
+    : available = j['available'] as bool? ?? false,
+      player = j['player'] as String? ?? '',
+      status = j['status'] as String? ?? 'stopped',
+      title = j['title'] as String? ?? '',
+      artist = j['artist'] as String? ?? '',
+      album = j['album'] as String? ?? '',
+      artId = j['art_id'] as String? ?? '',
+      positionMs = j['position_ms'] as int? ?? 0,
+      durationMs = j['duration_ms'] as int? ?? 0,
+      canSeek = j['can_seek'] as bool? ?? false,
+      canControl = j['can_control'] as bool? ?? false,
+      volume = (j['volume'] as num?)?.toDouble(),
+      muted = j['muted'] as bool?;
+
+  bool get playing => status == 'playing';
+}
