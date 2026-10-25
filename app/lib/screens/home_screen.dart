@@ -7,15 +7,18 @@ import '../models/device.dart';
 import '../services/agent_client.dart';
 import '../services/device_store.dart';
 import '../services/pc_events.dart';
+import '../services/settings.dart';
 import '../services/wol.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'device_form_screen.dart';
 import 'device_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final GlobalKey<ScaffoldMessengerState> messenger;
-  const HomeScreen({super.key, required this.messenger});
+  final AppSettings settings;
+  const HomeScreen({super.key, required this.messenger, required this.settings});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -167,6 +170,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               title: const Text('Velksync'),
               actions: [
                 IconButton(tooltip: 'Atualizar', onPressed: _refresh, icon: const Icon(Symbols.refresh_rounded)),
+                IconButton(
+                  tooltip: 'Configurações',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => SettingsScreen(settings: widget.settings)),
+                  ),
+                  icon: const Icon(Symbols.settings_rounded),
+                ),
                 const SizedBox(width: 8),
               ],
             ),
