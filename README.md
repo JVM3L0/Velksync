@@ -1,5 +1,7 @@
 # Velksync
 
+[![CI](https://github.com/JVM3L0/Velksync/actions/workflows/ci.yml/badge.svg)](https://github.com/JVM3L0/Velksync/actions/workflows/ci.yml)
+
 Liga, desliga e roda comandos no PC (Windows e Linux, dual boot) pelo celular, na rede local. O PC também manda ações para o celular.
 
 ```

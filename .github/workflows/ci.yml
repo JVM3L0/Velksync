@@ -1,0 +1,73 @@
+# Testes a cada envio no main e em pull requests (inclusive os do Dependabot).
+# Sem segredos e só com leitura; ações fixadas por hash, como no release.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent:
+    name: Agente
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - name: Formatação
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "::error::Rode gofmt -w ."; exit 1; }
+      - name: Análise
+        run: |
+          go vet ./...
+          GOOS=windows go vet ./...
+      - name: Testes
+        run: go test -race -count=1 ./...
+
+  app:
+    name: App
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.8
+          cache: true
+      - run: flutter pub get
+      - name: Formatação
+        run: dart format -l 120 --set-exit-if-changed --output=none lib test
+      - name: Análise
+        run: flutter analyze
+      - name: Testes
+        run: flutter test
+      - name: Testes do widget (JVM)
+        run: |
+          flutter build apk --config-only
+          cd android && ./gradlew --no-daemon :app:testDebugUnitTest
