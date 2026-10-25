@@ -1,0 +1,11 @@
+[Unit]
+Description=Velksync agent
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/velksync-agent
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
