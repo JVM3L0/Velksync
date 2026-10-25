@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../models/device.dart';
 import '../services/agent_client.dart';
 import '../services/wol.dart';
+import '../ui/perf.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
 import 'terminal_screen.dart';
@@ -25,7 +26,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
   bool _checked = false;
   List<PresetCommand> _commands = [];
   String? _running;
+  PcStats? _stats;
   Timer? _poll;
+  Timer? _statsPoll;
 
   @override
   void initState() {
@@ -33,13 +36,29 @@ class _DeviceScreenState extends State<DeviceScreen> {
     if (!widget.device.paired) return; // sem credencial: só dá para ligar
     _refresh();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
+    // Desempenho só enquanto esta tela está aberta e o PC responde.
+    _statsPoll = Timer.periodic(const Duration(seconds: 2), (_) => _refreshStats());
   }
 
   @override
   void dispose() {
     _poll?.cancel();
+    _statsPoll?.cancel();
     _client.close();
     super.dispose();
+  }
+
+  Future<void> _refreshStats() async {
+    if (_info == null) {
+      if (_stats != null) setState(() => _stats = null);
+      return;
+    }
+    try {
+      final stats = await _client.stats();
+      if (mounted) setState(() => _stats = stats);
+    } on AgentException {
+      // agente antigo sem /api/stats ou queda momentânea: mantém o último
+    }
   }
 
   Future<void> _refresh() async {
@@ -189,6 +208,12 @@ class _DeviceScreenState extends State<DeviceScreen> {
               duration: Motion.spatialDuration,
               curve: Motion.spatial,
               alignment: Alignment.topCenter,
+              child: online && _stats != null ? _performanceSection(_stats!) : const SizedBox(width: double.infinity),
+            ),
+            AnimatedSize(
+              duration: Motion.spatialDuration,
+              curve: Motion.spatial,
+              alignment: Alignment.topCenter,
               child: online ? _commandsSection() : const SizedBox(width: double.infinity),
             ),
           ],
@@ -258,6 +283,76 @@ class _DeviceScreenState extends State<DeviceScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Dashboard de desempenho no estilo do Caelestia.
+  Widget _performanceSection(PcStats s) {
+    final scheme = Theme.of(context).colorScheme;
+    final gpu = s.gpu;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionLabel(
+          'Desempenho',
+          action: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              'ligado há ${formatUptime(s.uptime)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ),
+        ),
+        HeroCard(
+          icon: Symbols.memory_rounded,
+          label: 'CPU',
+          subLabel: s.cpuName.isNotEmpty ? shortCpuName(s.cpuName) : '${s.cpuThreads} threads',
+          usage: s.cpuPercent / 100,
+          accent: scheme.primary,
+          temperature: s.cpuTemp,
+        ),
+        if (gpu != null) ...[
+          const SizedBox(height: 10),
+          HeroCard(
+            icon: Symbols.desktop_windows_rounded,
+            label: 'GPU',
+            subLabel: gpu.name,
+            usage: gpu.percent / 100,
+            accent: scheme.secondary,
+            temperature: gpu.temp,
+            fallback: gpu.vramTotal == 0
+                ? null
+                : (
+                    text: 'VRAM ${formatBytes(gpu.vramUsed)} / ${formatBytes(gpu.vramTotal)}',
+                    fraction: gpu.vramFraction,
+                  ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: GaugeCard(
+                icon: Symbols.memory_alt_rounded,
+                title: 'Memória',
+                used: s.memUsed,
+                total: s.memTotal,
+                accent: scheme.tertiary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GaugeCard(
+                icon: Symbols.hard_drive_rounded,
+                title: 'Disco',
+                used: s.diskUsed,
+                total: s.diskTotal,
+                accent: scheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

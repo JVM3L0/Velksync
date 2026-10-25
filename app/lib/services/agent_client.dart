@@ -80,6 +80,9 @@ class AgentClient {
   Future<AgentInfo> info() async =>
       AgentInfo.fromJson(await _send('GET', '/api/info', timeout: const Duration(seconds: 3)) as Map<String, dynamic>);
 
+  Future<PcStats> stats() async =>
+      PcStats.fromJson(await _send('GET', '/api/stats', timeout: const Duration(seconds: 3)) as Map<String, dynamic>);
+
   /// action: shutdown, reboot ou sleep.
   Future<void> power(String action) => _send('POST', '/api/power', body: {'action': action});
 

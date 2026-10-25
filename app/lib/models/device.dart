@@ -132,3 +132,46 @@ class PcEvent {
       text = j['text'] as String? ?? '',
       url = j['url'] as String? ?? '';
 }
+
+/// Uso do PC (GET /api/stats). Campos nulos: o sistema não expõe (ex.:
+/// temperaturas no Windows) e o medidor correspondente é escondido.
+class PcStats {
+  final String cpuName;
+  final double cpuPercent;
+  final int cpuThreads;
+  final int memUsed, memTotal, diskUsed, diskTotal;
+  final double? cpuTemp;
+  final GpuStats? gpu;
+  final Duration uptime;
+
+  PcStats.fromJson(Map<String, dynamic> j)
+    : cpuName = j['cpu_name'] as String? ?? '',
+      cpuPercent = (j['cpu_percent'] as num? ?? 0).toDouble(),
+      cpuThreads = j['cpu_threads'] as int? ?? 0,
+      memUsed = j['mem_used'] as int? ?? 0,
+      memTotal = j['mem_total'] as int? ?? 0,
+      diskUsed = j['disk_used'] as int? ?? 0,
+      diskTotal = j['disk_total'] as int? ?? 0,
+      cpuTemp = (j['cpu_temp'] as num?)?.toDouble(),
+      gpu = j['gpu'] == null ? null : GpuStats.fromJson(j['gpu'] as Map<String, dynamic>),
+      uptime = Duration(seconds: j['uptime_seconds'] as int? ?? 0);
+
+  double get memFraction => memTotal == 0 ? 0 : memUsed / memTotal;
+  double get diskFraction => diskTotal == 0 ? 0 : diskUsed / diskTotal;
+}
+
+class GpuStats {
+  final String name;
+  final double percent;
+  final int vramUsed, vramTotal;
+  final double? temp;
+
+  GpuStats.fromJson(Map<String, dynamic> j)
+    : name = j['name'] as String? ?? 'GPU',
+      percent = (j['percent'] as num? ?? 0).toDouble(),
+      vramUsed = j['vram_used'] as int? ?? 0,
+      vramTotal = j['vram_total'] as int? ?? 0,
+      temp = (j['temp'] as num?)?.toDouble();
+
+  double get vramFraction => vramTotal == 0 ? 0 : vramUsed / vramTotal;
+}
