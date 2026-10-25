@@ -3,6 +3,8 @@
 Uso (precisa do resvg-py; com uv não instala nada no sistema):
     uv run --no-project --with resvg-py python tools/icon/generate.py android app/android/app/src/main/res preview.png
     uv run --no-project --with resvg-py python tools/icon/generate.py sheet variacoes.png
+    uv run --no-project --with resvg-py python tools/icon/generate.py docs docs
+        (ícone do README e prévia 1280x640 para o GitHub, em docs/)
 
 
 Canvas do ícone adaptativo: 108x108; o launcher mostra o miolo 72x72 (18..90)
@@ -130,3 +132,26 @@ if __name__ == "__main__":
         # prévia final em 512 para conferência
         open(sys.argv[3], "wb").write(bytes(resvg_py.svg_to_bytes(svg_string=(
             '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">' + tile(body, 0, 0, 512, "square", "p") + "</svg>"))))
+
+    elif mode == "docs":
+        import os
+        out = sys.argv[2]
+        os.makedirs(out, exist_ok=True)
+        body = design(VARIANTS["b"])
+        render = lambda svg: bytes(resvg_py.svg_to_bytes(svg_string=svg))
+        # Ícone do README: o mesmo quadrado arredondado do launcher.
+        open(os.path.join(out, "icon.png"), "wb").write(render(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">'
+            + tile(body, 0, 0, 256, "square", "r") + "</svg>"))
+        # Prévia de link do GitHub (Settings → Social preview): 1280x640.
+        preview = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640">'
+            f'<defs><linearGradient id="pbg" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="{NAVY_A}"/>'
+            f'<stop offset="1" stop-color="{NAVY_B}"/></linearGradient></defs>'
+            '<rect width="1280" height="640" fill="url(#pbg)"/>'
+            + tile(body, 130, 170, 300, "square", "g")
+            + f'<text x="500" y="315" font-family="Ubuntu, DejaVu Sans" font-weight="700" font-size="104" fill="{ICE_HI}">Velksync</text>'
+            f'<text x="504" y="385" font-family="Ubuntu, DejaVu Sans" font-size="38" fill="{ICE_MID}">Ligue, desligue e controle o PC pelo celular</text>'
+            f'<text x="504" y="440" font-family="Ubuntu, DejaVu Sans" font-size="30" fill="{ICE_LO}">Windows e Linux · rede local · código aberto</text>'
+            "</svg>")
+        open(os.path.join(out, "social-preview.png"), "wb").write(render(preview))

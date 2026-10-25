@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" width="128" alt="Ícone do Velksync: asas de gelo em V"></p>
+
 # Velksync
 
 [![CI](https://github.com/JVM3L0/Velksync/actions/workflows/ci.yml/badge.svg)](https://github.com/JVM3L0/Velksync/actions/workflows/ci.yml)
