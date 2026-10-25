@@ -85,7 +85,14 @@ velksync-agent send vibrate
 
 Dá para usar no fim de scripts, por exemplo `make && velksync-agent send notify ok`. **Limitação**: só chega enquanto o app estiver aberto ou em primeiro plano. Receber com o app fechado exige push (FCM) ou um serviço em segundo plano no Android.
 
-## 4. Rodar o app
+## 4. Desempenho do PC
+
+O painel do PC no app mostra CPU, GPU, memória e disco em tempo real (atualiza a cada 2 s enquanto a tela está aberta), no estilo do dashboard do Caelestia. Fontes:
+
+- **Windows**: APIs nativas (as mesmas do Gerenciador de Tarefas). O Windows não expõe temperaturas sem driver de terceiros, então elas não aparecem.
+- **Linux**: `/proc` e `/sys`; GPU AMD pelo driver `amdgpu` e temperatura da CPU pelo `k10temp`/`coretemp`.
+
+## 5. Rodar o app
 
 ```sh
 cd app
@@ -108,6 +115,20 @@ velksync-agent fingerprint             # pin do certificado; confira com o mostr
 Use um **celular de verdade no mesmo Wi-Fi**. O emulador Android fica atrás de NAT, então broadcast (WoL e descoberta) não chega na sua rede.
 
 **iOS**: a conexão com o agente funciona. Já broadcast UDP (WoL e descoberta) exige o entitlement `com.apple.developer.networking.multicast`, que a Apple precisa aprovar. Até lá, cadastre o IP manualmente; o botão Ligar não vai funcionar.
+
+## Releases
+
+Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APK assinado, agente para Linux (`.tar.gz`) e Windows (`.zip`), `SHA256SUMS` e atestado de proveniência (repositórios públicos). A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
+
+Configuração única da chave de assinatura do app:
+
+```sh
+keytool -genkeypair -keystore velksync-release.jks -storetype PKCS12 -alias velksync \
+  -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Velksync"
+base64 -w0 velksync-release.jks   # conteúdo do secret ANDROID_KEYSTORE_BASE64
+```
+
+Em *Settings → Secrets and variables → Actions* do repositório, crie `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`velksync`) e `ANDROID_KEY_PASSWORD` (com PKCS12, a mesma senha da keystore). **Guarde o `.jks` e a senha num backup seguro**: sem eles não dá para publicar atualizações que o Android aceite por cima da versão instalada. Nunca coloque o `.jks` no repositório (o `.gitignore` bloqueia).
 
 ## Segurança
 
