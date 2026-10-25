@@ -3,7 +3,7 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.4.1] - 2026-10-25
 
 ### Adicionado
 - Aviso na aba Controle quando app e agente estão em versões diferentes, com
