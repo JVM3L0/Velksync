@@ -37,6 +37,9 @@ type Config struct {
 	AllowShell     bool      `json:"allow_shell"`
 	CommandTimeout int       `json:"command_timeout_seconds"`
 	Commands       []Command `json:"commands"`
+	// Mídia pausada há mais que isso some do app (aba de navegador congelada
+	// não toca mesmo aceitando o play). Ausente: 10; 0: nunca esconde.
+	MediaIdleMinutes *int `json:"media_idle_minutes,omitempty"`
 	// Celulares pareados neste sistema (só para listar) e ids revogados.
 	// No dual boot, revogue nos dois sistemas.
 	Devices []PairedDevice `json:"devices,omitempty"`
@@ -101,6 +104,13 @@ func loadConfig(path string) (Config, error) {
 		cfg.CommandTimeout = 30
 	}
 	return cfg, nil
+}
+
+func (c Config) mediaIdle() time.Duration {
+	if c.MediaIdleMinutes == nil {
+		return defaultMediaIdle
+	}
+	return time.Duration(max(0, *c.MediaIdleMinutes)) * time.Minute
 }
 
 func saveConfig(path string, cfg Config) error {

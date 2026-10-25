@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 )
 
 // MediaState é o que está tocando no PC (MPRIS no Linux, SMTC no Windows).
@@ -22,6 +23,9 @@ type MediaState struct {
 	ArtID      string   `json:"art_id,omitempty"` // muda quando a capa muda
 	Volume     *float64 `json:"volume"`           // 0..1 do dispositivo de saída padrão
 	Muted      *bool    `json:"muted"`
+	// Há quanto tempo está pausado, quando o sistema informa (Windows: hora
+	// da pausa no SMTC). Uso interno: não vai para o app.
+	PausedMs int64 `json:"paused_ms,omitempty"`
 }
 
 // mediaBackend é implementado por sistema (media_linux.go, media_windows.go).
@@ -55,7 +59,55 @@ func currentMedia() MediaState {
 	if st.Status == "" {
 		st.Status = "stopped"
 	}
-	return st
+	return mediaIdle.apply(st, time.Now())
+}
+
+// mediaIdle esconde o que ficou pausado tempo demais. Navegadores congelam
+// abas paradas: o play do app é aceito, o SMTC diz "tocando" e nada toca.
+// Mídia parada há muito tempo vira "nada tocando" e só volta ao tocar de novo.
+var mediaIdle = &idleFilter{after: defaultMediaIdle}
+
+const defaultMediaIdle = 10 * time.Minute
+
+type idleFilter struct {
+	mu    sync.Mutex
+	after time.Duration // 0 desliga
+	key   string        // faixa pausada observada
+	since time.Time     // quando o agente a viu pausada pela primeira vez
+}
+
+func (f *idleFilter) setAfter(d time.Duration) {
+	f.mu.Lock()
+	f.after = d
+	f.mu.Unlock()
+}
+
+func (f *idleFilter) apply(st MediaState, now time.Time) MediaState {
+	paused := st.PausedMs
+	st.PausedMs = 0
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !st.Available || st.Status == "playing" {
+		f.key = "" // tocou: a próxima pausa conta do zero
+		return st
+	}
+	if f.after <= 0 {
+		return st
+	}
+	// Sem a hora da pausa vinda do sistema (Linux), conta desde que o agente
+	// viu a faixa pausada; trocar de faixa recomeça a contagem.
+	key := st.Player + "|" + st.Title + "|" + st.Artist
+	if key != f.key {
+		f.key, f.since = key, now
+	}
+	idle := now.Sub(f.since)
+	if paused > 0 {
+		idle = time.Duration(paused) * time.Millisecond
+	}
+	if idle < f.after {
+		return st
+	}
+	return MediaState{Status: "stopped", Volume: st.Volume, Muted: st.Muted}
 }
 
 // GET /api/media/art

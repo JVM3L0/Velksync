@@ -75,6 +75,7 @@ Reinicie o agente depois de editar a config.
 ```
 
 - `commands`: aparecem como botões no app. Um comando sem variante para o SO atual fica escondido.
+- `media_idle_minutes` (padrão 10): mídia pausada há mais que isso some do app e volta quando tocar de novo. Navegadores congelam abas paradas há muito tempo: o play é aceito, mas o vídeo não toca. `0` desliga.
 - `allow_shell: true`: libera o **terminal livre** no app. Qualquer celular pareado roda qualquer coisa como seu usuário; deixe desligado se não usar. No Windows os comandos rodam via `cmd.exe`; no Linux, via `/bin/sh`.
 - `devices` / `revoked`: mantidos pelo agente (celulares pareados e revogados). Não edite à mão.
 - Logs: `journalctl --user -u velksync-agent -f` no Linux; `agent.log` ao lado da config no Windows.

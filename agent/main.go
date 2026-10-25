@@ -149,6 +149,7 @@ func run(configPath, logPath string) error {
 	}
 
 	go serveDiscovery(cfg)
+	mediaIdle.setAfter(cfg.mediaIdle())
 	srv := &Server{cfg: cfg, configPath: configPath, hub: NewHub()}
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("velksync-agent %s ouvindo em https://%s (terminal livre: %v, pin %s)", version, addr, cfg.AllowShell, shortPin(pin))

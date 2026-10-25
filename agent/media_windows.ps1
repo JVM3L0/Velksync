@@ -102,6 +102,12 @@ function State {
     # A posição vale para LastUpdatedTime; tocando, soma o tempo desde então.
     if ($status -eq 'playing') { $pos += ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalMilliseconds }
     if ($dur -gt 0) { $pos = [Math]::Min($pos, $dur) }
+    # Pausado: LastUpdatedTime é a hora da pausa (o agente esconde o que parou
+    # há muito tempo). Sem hora válida, o agente conta por conta própria.
+    $pausedMs = 0
+    if ($status -eq 'paused' -and $tl.LastUpdatedTime.Year -gt 2000) {
+        $pausedMs = [Math]::Max(0.0, ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalMilliseconds)
+    }
     $artId = ''
     if ($p.Thumbnail) { $artId = ('{0:x8}' -f ("$($p.Title)|$($p.Artist)|$($p.AlbumTitle)").GetHashCode()) }
     @{
@@ -118,6 +124,7 @@ function State {
         art_id      = $artId
         volume      = $v.volume
         muted       = $v.muted
+        paused_ms   = [int64]$pausedMs
     }
 }
 

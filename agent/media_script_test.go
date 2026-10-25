@@ -29,4 +29,8 @@ func TestWindowsMediaScriptPitfalls(t *testing.T) {
 	if regexp.MustCompile(`(?m)^\s+int \w+\(`).MatchString(script) {
 		t.Error("método COM sem [PreserveSig]")
 	}
+	// O agente esconde mídia pausada há muito tempo usando a hora da pausa.
+	if !strings.Contains(script, "paused_ms") {
+		t.Error("o auxiliar não informa paused_ms")
+	}
 }

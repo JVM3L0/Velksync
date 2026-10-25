@@ -12,6 +12,11 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 - Tema **Velksync** (gelo e marinho do ícone) e abertura do app com a marca.
 - Licença GPL-3.0.
 
+### Corrigido
+- Play no app não tocava vídeos em abas do navegador paradas há muito tempo
+  (a aba congelada aceita o play e diz "tocando", mas não toca). Mídia
+  pausada há mais de 10 minutos agora some do player (`media_idle_minutes`).
+
 ### Alterado
 - Release publica um APK por processador (~25 MB em vez de ~72 MB).
 - O app de desenvolvimento é o "Velksync Dev" (`com.velksync.velksync.debug`)
