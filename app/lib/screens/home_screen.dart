@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
@@ -33,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final Map<String, PcState> _status = {}; // ausente = verificando
   final _wakes = WakeTracker.instance;
   Timer? _poll;
+  final _celebrated = <String>{}; // PCs cujo "ligou" já foi comemorado
 
   @override
   void initState() {
@@ -62,7 +64,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _onWake() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    for (final d in _devices) {
+      final p = _wakes.of(d.id);
+      final woke = p != null && (p.phase == WakePhase.online || p.phase == WakePhase.awaitingLogin);
+      if (!woke) {
+        _celebrated.remove(d.id);
+      } else if (_celebrated.add(d.id)) {
+        _celebrate(d, p);
+      }
+    }
+    setState(() {});
+  }
+
+  /// O momento marcante do app: o PC respondeu ao "ligar". Vibração, o ícone
+  /// dá um pulo e um aviso diz quanto demorou (vale em qualquer tela).
+  void _celebrate(Device d, WakeProgress p) {
+    HapticFeedback.mediumImpact();
+    final login = p.phase == WakePhase.awaitingLogin ? ' · faça login para controlar' : '';
+    widget.messenger.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('${d.name} ligou em ${humanElapsed(p.elapsed)}$login')));
   }
 
   Future<void> _load() async {
@@ -278,7 +300,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                IconBadge(icon: on ? osIcon(os) : Symbols.computer_rounded, highlighted: on, size: 60),
+                WakePop(
+                  active: _celebrated.contains(d.id),
+                  child: IconBadge(icon: on ? osIcon(os) : Symbols.computer_rounded, highlighted: on, size: 60),
+                ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(

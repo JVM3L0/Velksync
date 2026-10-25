@@ -302,3 +302,36 @@ IconData osIcon(String os) => switch (os) {
   'linux' => Symbols.terminal_rounded,
   _ => Symbols.computer_rounded,
 };
+
+/// Pulo curto com mola quando [active] passa a verdadeiro (o PC acabou de
+/// ligar). Sem efeito com "remover animações".
+class WakePop extends StatefulWidget {
+  final bool active;
+  final Widget child;
+  const WakePop({super.key, required this.active, required this.child});
+
+  @override
+  State<WakePop> createState() => _WakePopState();
+}
+
+class _WakePopState extends State<WakePop> with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(vsync: this, duration: Motion.spatialDuration, value: 1);
+
+  @override
+  void didUpdateWidget(WakePop old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active && !MediaQuery.disableAnimationsOf(context)) _c.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ScaleTransition(
+    scale: _c.drive(Tween<double>(begin: 0.8, end: 1).chain(CurveTween(curve: Motion.spatialFast))),
+    child: widget.child,
+  );
+}

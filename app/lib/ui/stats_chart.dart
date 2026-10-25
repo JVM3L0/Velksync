@@ -64,7 +64,11 @@ class _StatsSheetState extends State<StatsSheet> {
                   ),
                   Text(
                     points.isEmpty ? '--' : percentText(points.last.$2),
-                    style: text.headlineMedium?.copyWith(color: color, fontWeight: FontWeight.w700),
+                    style: text.headlineMedium?.copyWith(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: tabular,
+                    ),
                   ),
                 ],
               ),
@@ -77,7 +81,11 @@ class _StatsSheetState extends State<StatsSheet> {
                     Column(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [Text('100%', style: muted), Text('50%', style: muted), Text('0%', style: muted)],
+                      children: [
+                        Text('100%', style: muted),
+                        Text('50%', style: muted),
+                        Text('0%', style: muted),
+                      ],
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -98,7 +106,10 @@ class _StatsSheetState extends State<StatsSheet> {
                 padding: const EdgeInsets.only(left: 44),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [Text('-$minutes min', style: muted), Text('agora', style: muted)],
+                  children: [
+                    Text('-$minutes min', style: muted),
+                    Text('agora', style: muted),
+                  ],
                 ),
               ),
               const SizedBox(height: 20),
@@ -112,7 +123,7 @@ class _StatsSheetState extends State<StatsSheet> {
                           const SizedBox(height: 2),
                           Text(
                             v == null ? '--' : percentText(v),
-                            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600, fontFeatures: tabular),
                           ),
                         ],
                       ),

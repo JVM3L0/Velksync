@@ -154,10 +154,13 @@ class _MediaPanelState extends State<MediaPanel> {
       // demorar, a faixa entra com a capa padrão e a imagem chega depois.
       final load = _loadArt(st);
       var late = false;
-      final got = await load.timeout(_artWait, onTimeout: () {
-        late = true;
-        return null;
-      });
+      final got = await load.timeout(
+        _artWait,
+        onTimeout: () {
+          late = true;
+          return null;
+        },
+      );
       if (!mounted || !identical(_smoother.shown, st)) return; // chegou estado mais novo
       _useArt(got);
       art = got?.bytes;

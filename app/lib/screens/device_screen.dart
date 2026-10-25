@@ -282,58 +282,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           _hero(status),
-          SectionLabel(
-            'Energia',
-            action: online && _info!.has('schedule')
-                ? TextButton.icon(
-                    onPressed: _schedule,
-                    icon: const Icon(Symbols.schedule_rounded),
-                    label: const Text('Agendar'),
-                  )
-                : null,
-          ),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.35,
-            children: [
-              MorphTile(
-                icon: Symbols.power_settings_new_rounded,
-                label: 'Ligar',
-                color: scheme.primary,
-                onColor: scheme.onPrimary,
-                onTap:
-                    (status == PcStatus.offline || status == PcStatus.unpaired || status == PcStatus.wakeFailed) &&
-                        d.mac.isNotEmpty
-                    ? _wake
-                    : null,
-              ),
-              MorphTile(
-                icon: Symbols.power_off_rounded,
-                label: 'Desligar',
-                color: Color.alphaBlend(scheme.error.withValues(alpha: 0.16), scheme.surfaceContainer),
-                onColor: scheme.error,
-                onTap: online ? () => _power('shutdown', 'Desligar') : null,
-              ),
-              MorphTile(
-                icon: Symbols.restart_alt_rounded,
-                label: 'Reiniciar',
-                color: scheme.secondaryContainer,
-                onColor: scheme.onSecondaryContainer,
-                onTap: online ? () => _power('reboot', 'Reiniciar') : null,
-              ),
-              MorphTile(
-                icon: Symbols.bedtime_rounded,
-                label: 'Suspender',
-                color: scheme.tertiaryContainer,
-                onColor: scheme.onTertiaryContainer,
-                onTap: online ? () => _power('sleep', 'Suspender') : null,
-              ),
-            ],
-          ),
+          ..._energy(d, status, online, scheme),
           AnimatedSize(
             duration: Motion.spatialDuration,
             curve: Motion.effects,
@@ -359,6 +308,83 @@ class _DeviceScreenState extends State<DeviceScreen> {
         ],
       ),
     );
+  }
+
+  /// Só as ações que fazem sentido no estado do PC: desligado mostra um
+  /// "Ligar" grande; ligado, desligar, reiniciar, suspender e agendar. Com
+  /// número ímpar de botões, o primeiro ocupa a linha toda.
+  List<Widget> _energy(Device d, PcStatus status, bool online, ColorScheme scheme) {
+    final canWake = d.mac.isNotEmpty;
+    final tiles = <Widget>[
+      if (online) ...[
+        MorphTile(
+          icon: Symbols.power_off_rounded,
+          label: 'Desligar',
+          color: Color.alphaBlend(scheme.error.withValues(alpha: 0.16), scheme.surfaceContainer),
+          onColor: scheme.error,
+          onTap: () => _power('shutdown', 'Desligar'),
+        ),
+        MorphTile(
+          icon: Symbols.restart_alt_rounded,
+          label: 'Reiniciar',
+          color: scheme.secondaryContainer,
+          onColor: scheme.onSecondaryContainer,
+          onTap: () => _power('reboot', 'Reiniciar'),
+        ),
+        MorphTile(
+          icon: Symbols.bedtime_rounded,
+          label: 'Suspender',
+          color: scheme.tertiaryContainer,
+          onColor: scheme.onTertiaryContainer,
+          onTap: () => _power('sleep', 'Suspender'),
+        ),
+        if (_info!.has('schedule'))
+          MorphTile(
+            icon: Symbols.schedule_rounded,
+            label: 'Agendar',
+            color: scheme.surfaceContainerHigh,
+            onColor: scheme.onSurface,
+            onTap: _schedule,
+          ),
+      ] else if (canWake &&
+          (status == PcStatus.offline || status == PcStatus.unpaired || status == PcStatus.wakeFailed))
+        MorphTile(
+          icon: Symbols.power_settings_new_rounded,
+          label: status == PcStatus.wakeFailed ? 'Tentar de novo' : 'Ligar',
+          color: scheme.primary,
+          onColor: scheme.onPrimary,
+          onTap: _wake,
+        ),
+    ];
+    if (tiles.isEmpty) return const []; // ligando, aguardando login, verificando
+    return [
+      const SectionLabel('Energia'),
+      LayoutBuilder(
+        builder: (context, box) {
+          const gap = 10.0;
+          final height = (box.maxWidth - gap) / 2 / 1.35;
+          final rows = <Widget>[
+            if (tiles.length.isOdd) SizedBox(width: double.infinity, height: height, child: tiles.first),
+            for (var i = tiles.length % 2; i < tiles.length; i += 2)
+              SizedBox(
+                height: height,
+                child: Row(
+                  children: [
+                    Expanded(child: tiles[i]),
+                    const SizedBox(width: gap),
+                    Expanded(child: tiles[i + 1]),
+                  ],
+                ),
+              ),
+          ];
+          return Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[if (i > 0) const SizedBox(height: gap), rows[i]],
+            ],
+          );
+        },
+      ),
+    ];
   }
 
   Widget _performanceTab() {
@@ -405,35 +431,38 @@ class _DeviceScreenState extends State<DeviceScreen> {
       ),
       child: Row(
         children: [
-          AnimatedContainer(
-            duration: Motion.spatialDuration,
-            curve: Motion.spatial,
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: online
-                  ? scheme.primary
-                  : on
-                  ? scheme.secondary
-                  : scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(on ? Radii.xxl : Radii.lgPlus),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  on ? osIcon(_info?.os ?? _awaitingLoginOs ?? '') : Symbols.computer_rounded,
-                  size: 36,
-                  fill: on ? 1 : 0,
-                  color: online
-                      ? scheme.onPrimary
-                      : on
-                      ? scheme.onSecondary
-                      : scheme.onSurfaceVariant,
-                ),
-                if (status == PcStatus.waking)
-                  const SizedBox.square(dimension: 64, child: CircularProgressIndicator(strokeWidth: 4)),
-              ],
+          WakePop(
+            active: wake != null && (wake.phase == WakePhase.online || wake.phase == WakePhase.awaitingLogin),
+            child: AnimatedContainer(
+              duration: Motion.spatialDuration,
+              curve: Motion.spatial,
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: online
+                    ? scheme.primary
+                    : on
+                    ? scheme.secondary
+                    : scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(on ? Radii.xxl : Radii.lgPlus),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    on ? osIcon(_info?.os ?? _awaitingLoginOs ?? '') : Symbols.computer_rounded,
+                    size: 36,
+                    fill: on ? 1 : 0,
+                    color: online
+                        ? scheme.onPrimary
+                        : on
+                        ? scheme.onSecondary
+                        : scheme.onSurfaceVariant,
+                  ),
+                  if (status == PcStatus.waking)
+                    const SizedBox.square(dimension: 64, child: CircularProgressIndicator(strokeWidth: 4)),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 20),
@@ -484,13 +513,16 @@ class _DeviceScreenState extends State<DeviceScreen> {
       children: [
         SectionLabel(
           'Desempenho',
-          action: Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Text(
-              'ligado há ${formatUptime(s.uptime)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ),
+          // Sem temperatura (Windows), o tempo ligado vai para o cartão da CPU.
+          action: s.cpuTemp == null
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    'ligado há ${formatUptime(s.uptime)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ),
         ),
         HeroCard(
           icon: Symbols.memory_rounded,
@@ -499,6 +531,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
           usage: s.cpuPercent / 100,
           accent: scheme.primary,
           temperature: s.cpuTemp,
+          fallback: (icon: Symbols.timer_rounded, text: 'Ligado há ${formatUptime(s.uptime)}', fraction: null),
           onTap: () => showStatsSheet(context, _history, Metric.cpu),
         ),
         if (gpu != null) ...[
@@ -514,6 +547,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
             fallback: gpu.vramTotal == 0
                 ? null
                 : (
+                    icon: Symbols.memory_alt_rounded,
                     text: 'VRAM ${formatBytes(gpu.vramUsed)} / ${formatBytes(gpu.vramTotal)}',
                     fraction: gpu.vramFraction,
                   ),

@@ -6,6 +6,13 @@ import 'widgets.dart';
 /// Tempo decorrido como "0:23".
 String formatElapsed(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
+/// Para frases: "38 s", "1 min 5 s", "2 min".
+String humanElapsed(Duration d) {
+  final m = d.inMinutes, s = d.inSeconds % 60;
+  if (m == 0) return '$s s';
+  return s == 0 ? '$m min' : '$m min $s s';
+}
+
 /// Causas mais comuns de o Wake-on-LAN não funcionar, na ordem em que vale
 /// a pena conferir.
 Future<void> showWakeHelp(BuildContext context) => showModalBottomSheet<void>(

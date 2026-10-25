@@ -33,6 +33,9 @@ String shortCpuName(String name) => name
 
 String percentText(double fraction) => '${(fraction * 100).round()}%';
 
+/// Algarismos de largura fixa: números que mudam ao vivo não tremem.
+const tabular = [FontFeature.tabularFigures()];
+
 /// Arco de progresso com espaço entre o preenchido e o trilho (M3 Expressive).
 class ExpressiveArc extends StatelessWidget {
   final double value; // 0..1
@@ -202,7 +205,7 @@ class HeroCard extends StatelessWidget {
   final double usage; // 0..1
   final Color accent;
   final double? temperature;
-  final ({String text, double fraction})? fallback; // quando não há temperatura
+  final ({IconData icon, String text, double? fraction})? fallback; // quando não há temperatura
   final VoidCallback? onTap; // abre o gráfico
 
   const HeroCard({
@@ -231,7 +234,7 @@ class HeroCard extends StatelessWidget {
           )
         : fallback == null
         ? null
-        : (icon: Symbols.memory_alt_rounded, text: fallback!.text, fraction: fallback!.fraction, color: accent);
+        : (icon: fallback!.icon, text: fallback!.text, fraction: fallback!.fraction, color: accent);
     return _TappableCard(
       onTap: onTap,
       child: Padding(
@@ -282,17 +285,22 @@ class HeroCard extends StatelessWidget {
                       children: [
                         Icon(footer.icon, color: footer.color, fill: 1, size: 20),
                         const SizedBox(width: 6),
-                        Text(footer.text, style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+                        Text(
+                          footer.text,
+                          style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w500, fontFeatures: tabular),
+                        ),
                       ],
                     ),
+                  ],
+                  if (footer?.fraction case final fraction?) ...[
                     const SizedBox(height: 8),
                     TweenAnimationBuilder<double>(
-                      tween: Tween(end: footer.fraction.clamp(0, 1)),
+                      tween: Tween(end: fraction.clamp(0, 1)),
                       duration: Motion.spatialDuration,
                       curve: Motion.effects,
                       builder: (_, v, _) => LinearProgressIndicator(
                         value: v,
-                        color: footer.color,
+                        color: footer!.color,
                         minHeight: 6,
                         borderRadius: BorderRadius.circular(3),
                       ),
@@ -312,7 +320,11 @@ class HeroCard extends StatelessWidget {
                   size: 96,
                   child: Text(
                     percentText(usage),
-                    style: text.headlineSmall?.copyWith(color: accent, fontWeight: FontWeight.w700),
+                    style: text.headlineSmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: tabular,
+                    ),
                   ),
                 ),
               ],
@@ -375,14 +387,17 @@ class GaugeCard extends StatelessWidget {
                 children: [
                   Text(
                     percentText(fraction),
-                    style: text.titleLarge?.copyWith(color: accent, fontWeight: FontWeight.w700),
+                    style: text.titleLarge?.copyWith(color: accent, fontWeight: FontWeight.w700, fontFeatures: tabular),
                   ),
                   Text('Usado', style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
                 ],
               ),
             ),
             const SizedBox(height: 6),
-            Text('${formatBytes(used)} / ${formatBytes(total)}', style: text.bodyMedium),
+            Text(
+              '${formatBytes(used)} / ${formatBytes(total)}',
+              style: text.bodyMedium?.copyWith(fontFeatures: tabular),
+            ),
           ],
         ),
       ),
