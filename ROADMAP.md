@@ -89,12 +89,30 @@ Sessão de mídia do Android com capa, título, pausar e pular. Decidir antes:
   build de release do APK e dos agentes, revisão de segurança do que mudou.
 - Nada é enviado nem publicado sem pedido explícito.
 
-## Depois
+## Ideias guardadas
 
-- Publicação: keystore e segredos gerados pelo dono do projeto; push e tag
-  só quando pedido.
-- Repositório e CI.
-- Assistente opcional (Gemini).
+Levantadas em 25/10/2026, ainda sem decisão. Cada uma ganha plano, casos de
+uso, testes e esboço antes de implementar.
+
+| # | Ideia | Tamanho | Nota |
+|---|---|---|---|
+| 1 | Reiniciar direto no outro sistema ("Reiniciar no Windows/Linux") | médio | `grub-reboot` / `bcdedit /bootsequence`; só na próxima inicialização |
+| 2 | Mandar do celular para o PC (menu Compartilhar: link abre no PC, texto vai para a área de transferência) | médio | hoje só existe PC → celular |
+| 3 | Controles de mídia na notificação e na tela de bloqueio | grande | ver item 4 acima |
+| 4 | Ligar o PC num horário (diário ou uma vez) | pequeno/médio | Wake-on-LAN agendado no celular |
+| 5 | Atalhos no ícone do app (Ligar/Desligar) | pequeno | |
+| 6 | Exportar/importar os PCs em backup criptografado | médio | evita parear de novo ao trocar de celular |
+| 7 | Touchpad e teclado remotos | grande | |
+| 8 | Instalar e testar o agente no Linux do dual boot | pequeno | com o dono do projeto |
+| 9 | Acesso fora de casa com Tailscale | médio | mais configuração e docs que código |
+| 10 | Avisos do PC com o app fechado | grande | custo de bateria ou privacidade |
+
+Também: assistente opcional (Gemini).
+
+## Feito fora do plano
+
+- Publicação da v0.4.0, CI a cada envio, Dependabot, APK por processador,
+  app de desenvolvimento separado e aviso de versão.
 
 ## Pendências manuais
 
