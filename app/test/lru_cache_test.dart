@@ -13,4 +13,18 @@ void main() {
     expect(c.get('c'), 3);
     expect(c.length, 2);
   });
+
+  test('respeita o tamanho total', () {
+    final c = LruCache<String, List<int>>(10, sizeOf: (v) => v.length, maxSize: 10)
+      ..put('a', List.filled(4, 0))
+      ..put('b', List.filled(4, 0))
+      ..put('c', List.filled(4, 0)); // 12 > 10: sai "a"
+    expect(c.get('a'), isNull);
+    expect(c.size, 8);
+    c.put('grande', List.filled(11, 0)); // maior que o limite: não entra
+    expect(c.get('grande'), isNull);
+    expect(c.size, 8);
+    c.put('b', List.filled(1, 0)); // substituir recalcula o tamanho
+    expect(c.size, 5);
+  });
 }

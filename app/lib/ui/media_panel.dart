@@ -46,8 +46,9 @@ class _MediaPanelState extends State<MediaPanel> {
   static const _artWait = Duration(milliseconds: 600);
 
   /// Últimas capas já baixadas e analisadas, por PC e capa: voltar a uma
-  /// faixa mostra a capa na hora. Só na memória, alguns MB no máximo.
-  static final _artCache = LruCache<String, _Art>(20);
+  /// faixa mostra a capa na hora. Só na memória: até 20 capas e 16 MB (cada
+  /// capa pode ter até 5 MB).
+  static final _artCache = LruCache<String, _Art>(20, sizeOf: (a) => a.bytes.length, maxSize: 16 << 20);
 
   MediaState? _state;
   Uint8List? _art;
