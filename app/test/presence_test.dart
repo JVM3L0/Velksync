@@ -59,7 +59,11 @@ void main() {
     expect(await probePresence(d, port: pc.port), 'windows');
     forge = true;
     expect(await probePresence(d, port: pc.port, timeout: const Duration(milliseconds: 300)), isNull);
-    expect(await probePresence(const Device(id: 'x', name: 'pc', host: '127.0.0.1')), isNull, reason: 'sem segredo');
+    expect(
+      await probePresence(const Device(id: 'x', name: 'pc', host: '127.0.0.1')),
+      isNull,
+      reason: 'sem segredo',
+    );
   });
 }
 
