@@ -48,8 +48,10 @@ ThemeData buildTheme(ColorScheme scheme) {
   return base.copyWith(
     textTheme: text,
     scaffoldBackgroundColor: scheme.surface,
+    // Volta preditiva do Android 14+: a tela acompanha o gesto e revela a de
+    // trás; fora do gesto, cai no fade forwards do Android 16.
     pageTransitionsTheme: const PageTransitionsTheme(
-      builders: {TargetPlatform.android: FadeForwardsPageTransitionsBuilder()},
+      builders: {TargetPlatform.android: PredictiveBackPageTransitionsBuilder()},
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
