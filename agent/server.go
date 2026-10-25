@@ -1,0 +1,229 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
+	"time"
+)
+
+const maxOutput = 64 << 10
+
+type Server struct {
+	cfg Config
+	hub *Hub
+}
+
+func (s *Server) routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/info", s.info)
+	mux.HandleFunc("POST /api/power", s.power)
+	mux.HandleFunc("GET /api/commands", s.listCommands)
+	mux.HandleFunc("POST /api/commands/{id}", s.runCommand)
+	mux.HandleFunc("POST /api/shell", s.shell)
+	mux.HandleFunc("GET /api/events", s.events)
+	mux.HandleFunc("POST /api/push", s.push)
+
+	return s.auth(mux)
+
+}
+
+func (s *Server) auth(next http.Handler) http.Handler {
+	want := []byte("Bearer " + s.cfg.Token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := []byte(r.Header.Get("Authorization"))
+		if subtle.ConstantTimeCompare(got, want) != 1 {
+			log.Printf("401 %s %s de %s", r.Method, r.URL.Path, r.RemoteAddr)
+			writeErr(w, http.StatusUnauthorized, "token inválido")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
+
+func writeErr(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func decode(r *http.Request, v any) error {
+	return json.NewDecoder(http.MaxBytesReader(nil, r.Body, 1<<20)).Decode(v)
+}
+
+func (s *Server) info(w http.ResponseWriter, r *http.Request) {
+	host, _ := os.Hostname()
+	local, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"name":        s.cfg.Name,
+		"hostname":    host,
+		"os":          runtime.GOOS,
+		"version":     version,
+		"mac":         macFor(addrIP(local), false),
+		"allow_shell": s.cfg.AllowShell,
+	})
+}
+
+func (s *Server) power(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := decode(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "json inválido")
+		return
+	}
+	cmd, err := powerCommand(req.Action)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	log.Printf("energia: %s (pedido de %s)", req.Action, r.RemoteAddr)
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "ok"})
+	// Dá tempo da resposta chegar no celular antes da máquina cair.
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			log.Printf("falha em %s: %v %s", req.Action, err, out)
+		}
+	}()
+}
+
+func (s *Server) listCommands(w http.ResponseWriter, r *http.Request) {
+	type item struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	list := []item{}
+	for _, c := range s.cfg.Commands {
+		if c.ForCurrentOS() != "" {
+			list = append(list, item{c.ID, c.Name})
+		}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (s *Server) runCommand(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	for _, c := range s.cfg.Commands {
+		if c.ID == id && c.ForCurrentOS() != "" {
+			log.Printf("comando %q (pedido de %s)", id, r.RemoteAddr)
+			writeJSON(w, http.StatusOK, s.execute(r.Context(), c.ForCurrentOS()))
+			return
+		}
+	}
+	writeErr(w, http.StatusNotFound, "comando não encontrado para este sistema")
+}
+
+func (s *Server) shell(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.AllowShell {
+		writeErr(w, http.StatusForbidden, "terminal livre desativado (allow_shell=false na config do agente)")
+		return
+	}
+	var req struct {
+		Command string `json:"command"`
+	}
+	if err := decode(r, &req); err != nil || strings.TrimSpace(req.Command) == "" {
+		writeErr(w, http.StatusBadRequest, "comando vazio")
+		return
+	}
+	log.Printf("shell %q (pedido de %s)", req.Command, r.RemoteAddr)
+	writeJSON(w, http.StatusOK, s.execute(r.Context(), req.Command))
+}
+
+type limitedBuffer struct{ bytes.Buffer }
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	if room := maxOutput - b.Len(); room > 0 {
+		if len(p) > room {
+			b.Buffer.Write(p[:room])
+		} else {
+			b.Buffer.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+type runResult struct {
+	ExitCode   int    `json:"exit_code"`
+	Output     string `json:"output"`
+	DurationMs int64  `json:"duration_ms"`
+	TimedOut   bool   `json:"timed_out"`
+}
+
+func (s *Server) execute(parent context.Context, line string) runResult {
+	ctx, cancel := context.WithTimeout(parent, time.Duration(s.cfg.CommandTimeout)*time.Second)
+	defer cancel()
+	cmd := shellCommand(ctx, line)
+	var out limitedBuffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	// Processos filhos que herdam o stdout não podem segurar a resposta para sempre.
+	cmd.WaitDelay = 2 * time.Second
+	start := time.Now()
+	err := cmd.Run()
+	res := runResult{Output: out.String(), DurationMs: time.Since(start).Milliseconds()}
+	var exitErr *exec.ExitError
+	switch {
+	case err == nil:
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		res.TimedOut, res.ExitCode = true, -1
+	case errors.As(err, &exitErr):
+		res.ExitCode = exitErr.ExitCode()
+	default:
+		res.ExitCode = -1
+		res.Output += fmt.Sprintf("\n[velksync] %v", err)
+	}
+	return res
+}
+
+func (s *Server) events(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeErr(w, http.StatusInternalServerError, "streaming não suportado")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	ch := s.hub.Subscribe()
+	defer s.hub.Unsubscribe(ch)
+	log.Printf("app conectado aos eventos: %s", r.RemoteAddr)
+	fmt.Fprint(w, ": conectado\n\n")
+	flusher.Flush()
+	ping := time.NewTicker(20 * time.Second)
+	defer ping.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			log.Printf("app desconectado dos eventos: %s", r.RemoteAddr)
+			return
+		case <-ping.C:
+			fmt.Fprint(w, ": ping\n\n")
+		case e := <-ch:
+			data, _ := json.Marshal(e)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+		}
+		flusher.Flush()
+	}
+}
+
+func (s *Server) push(w http.ResponseWriter, r *http.Request) {
+	var e Event
+	if err := decode(r, &e); err != nil || !validEventTypes[e.Type] {
+		writeErr(w, http.StatusBadRequest, "evento inválido (tipos: notify, open_url, clipboard, vibrate)")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"delivered": s.hub.Publish(e)})
+}
