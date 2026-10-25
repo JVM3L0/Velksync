@@ -8,6 +8,7 @@ import '../models/device.dart';
 import '../services/agent_client.dart';
 import '../services/media_smoother.dart';
 import 'perf.dart';
+import 'marquee.dart';
 import 'theme.dart';
 import 'transitions.dart';
 
@@ -45,6 +46,8 @@ class _MediaPanelState extends State<MediaPanel> {
   int _direction = 1; // 1 próxima, -1 anterior
   double _dragDx = 0; // arrasto da capa com o dedo
   bool _dragging = false;
+  bool _volumeOpen = false; // slider de volume à mostra
+  Timer? _volumeHide;
 
   AgentClient get _c => widget.client;
 
@@ -67,6 +70,7 @@ class _MediaPanelState extends State<MediaPanel> {
     _poll?.cancel();
     _tick?.cancel();
     _retryLive?.cancel();
+    _volumeHide?.cancel();
     _live?.cancel();
     _smoother.dispose();
     super.dispose();
@@ -192,7 +196,48 @@ class _MediaPanelState extends State<MediaPanel> {
     'muted': s.muted,
   };
 
+  /// Some sozinho depois de um tempo sem mexer, como nos players.
+  void _keepVolumeOpen() {
+    _volumeHide?.cancel();
+    _volumeHide = Timer(const Duration(seconds: 5), () {
+      if (mounted && _dragVolume == null) setState(() => _volumeOpen = false);
+    });
+  }
+
+  void _toggleVolume() {
+    setState(() => _volumeOpen = !_volumeOpen);
+    if (_volumeOpen) {
+      _keepVolumeOpen();
+    } else {
+      _volumeHide?.cancel();
+    }
+  }
+
+  Widget _volumeButton(MediaState st, ColorScheme scheme) {
+    final muted = st.muted ?? false;
+    final v = _dragVolume ?? st.volume ?? 0;
+    return IconButton(
+      tooltip: 'Volume',
+      isSelected: _volumeOpen,
+      style: IconButton.styleFrom(
+        backgroundColor: _volumeOpen ? scheme.secondaryContainer : null,
+        minimumSize: const Size(48, 48),
+      ),
+      onPressed: _toggleVolume,
+      icon: Icon(_volumeIcon(muted, v), fill: 1, color: muted ? scheme.error : scheme.onSurfaceVariant),
+    );
+  }
+
+  static IconData _volumeIcon(bool muted, double v) => muted
+      ? Symbols.volume_off_rounded
+      : v < 0.34
+      ? Symbols.volume_mute_rounded
+      : v < 0.67
+      ? Symbols.volume_down_rounded
+      : Symbols.volume_up_rounded;
+
   void _volumeChanged(double v) {
+    _keepVolumeOpen();
     setState(() => _dragVolume = v);
     // Enquanto arrasta, manda no máximo a cada 150 ms.
     if (DateTime.now().difference(_lastVolumeSent) > const Duration(milliseconds: 150)) {
@@ -212,16 +257,28 @@ class _MediaPanelState extends State<MediaPanel> {
       children: [
         _track(st, scheme, text),
         if (st.available) ...[
-          if (st.player.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Center(child: _playerChip(st.player, scheme, text)),
-          ],
           const SizedBox(height: 16),
           _progress(st, scheme, text),
           const SizedBox(height: 8),
           _controls(st, scheme),
         ],
-        if (st.volume != null) ...[const SizedBox(height: 28), _volume(st, scheme)],
+        const SizedBox(height: 16),
+        // Embaixo de tudo: abrir o volume não empurra os controles.
+        Row(
+          children: [
+            if (st.available && st.player.isNotEmpty) Flexible(child: _playerChip(st.player, scheme, text)),
+            const Spacer(),
+            if (st.volume != null) _volumeButton(st, scheme),
+          ],
+        ),
+        AnimatedSize(
+          duration: Motion.spatialDuration,
+          curve: Motion.spatial,
+          alignment: Alignment.topCenter,
+          child: _volumeOpen && st.volume != null
+              ? Padding(padding: const EdgeInsets.only(top: 8), child: _volume(st, scheme))
+              : const SizedBox(width: double.infinity),
+        ),
       ],
     );
   }
@@ -235,24 +292,16 @@ class _MediaPanelState extends State<MediaPanel> {
         MediaCover(art: st.available ? _art : null, artId: _artId, available: st.available, playing: st.playing),
         const SizedBox(height: 24),
         if (st.available) ...[
-          Text(
+          // Uma linha cada, sempre: os controles não descem com títulos longos.
+          MarqueeText(
             st.title.isEmpty ? 'Sem título' : st.title,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
             style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
-          if (st.artist.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                st.artist,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ),
+          const SizedBox(height: 4),
+          MarqueeText(
+            st.artist.isEmpty ? ' ' : st.artist,
+            style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
+          ),
         ] else
           Text(
             'Nada tocando no PC',
@@ -377,26 +426,18 @@ class _MediaPanelState extends State<MediaPanel> {
             IconButton(
               tooltip: muted ? 'Ativar som' : 'Mudo',
               onPressed: () {
+                _keepVolumeOpen();
                 setState(() => _state = MediaState.fromJson({..._json(st), 'muted': !muted}));
                 _run(() => _c.mediaVolume(muted: !muted));
               },
-              icon: Icon(
-                muted
-                    ? Symbols.volume_off_rounded
-                    : v < 0.34
-                    ? Symbols.volume_mute_rounded
-                    : v < 0.67
-                    ? Symbols.volume_down_rounded
-                    : Symbols.volume_up_rounded,
-                fill: 1,
-                color: muted ? scheme.error : scheme.primary,
-              ),
+              icon: Icon(_volumeIcon(muted, v), fill: 1, color: muted ? scheme.error : scheme.primary),
             ),
             Expanded(
               child: Slider(
                 value: v.clamp(0, 1),
                 onChanged: _volumeChanged,
                 onChangeEnd: (x) {
+                  _keepVolumeOpen();
                   setState(() {
                     _dragVolume = null;
                     _state = MediaState.fromJson({..._json(st), 'volume': x});

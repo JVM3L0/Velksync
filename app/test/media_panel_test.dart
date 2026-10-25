@@ -21,7 +21,17 @@ class FakePc extends AgentClient {
     'artist': 'Linkin Park',
     'can_control': true,
     'duration_ms': 180000,
+    'player': 'Helium',
+    'volume': volume,
+    'muted': false,
   });
+
+  double volume = 0.5;
+
+  @override
+  Future<void> mediaVolume({double? volume, bool? muted}) async {
+    if (volume != null) this.volume = volume;
+  }
 
   @override
   Future<Uint8List?> mediaArt() async => null;
@@ -37,7 +47,11 @@ class FakePc extends AgentClient {
 void main() {
   testWidgets('arrastar a capa para a esquerda pula para a próxima', (tester) async {
     final pc = FakePc();
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: MediaPanel(client: pc))));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MediaPanel(client: pc)),
+      ),
+    );
     await tester.pump();
     expect(find.text('Numb'), findsOneWidget);
 
@@ -55,11 +69,63 @@ void main() {
 
   testWidgets('arrasto curto e lento não pula', (tester) async {
     final pc = FakePc();
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: MediaPanel(client: pc))));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MediaPanel(client: pc)),
+      ),
+    );
     await tester.pump();
     await tester.timedDrag(find.text('Numb'), const Offset(-40, 0), const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
     expect(pc.sent, isEmpty);
     expect(find.text('Numb'), findsOneWidget);
+  });
+
+  testWidgets('título longo não empurra os controles', (tester) async {
+    Future<double> playY(String title) async {
+      final pc = FakePc()..title = title;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: MediaPanel(client: pc)),
+        ),
+      );
+      await tester.pump();
+      return tester.getCenter(find.byTooltip('Próxima')).dy;
+    }
+
+    final short = await playY('Numb');
+    final long = await playY('Uma faixa com um título enorme que antes ocupava duas linhas inteiras e mais um pouco');
+    expect(long, short);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('volume fica num botão e o slider some sozinho', (tester) async {
+    tester.view.physicalSize = const Size(1220, 2712); // motorola edge 70
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final pc = FakePc();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MediaPanel(client: pc)),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(Slider), findsOneWidget, reason: 'só a barra de progresso');
+    final next = tester.getCenter(find.byTooltip('Próxima')).dy;
+
+    await tester.tap(find.byTooltip('Volume'));
+    await tester.pump(); // a animação de abrir começa neste quadro
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(Slider), findsNWidgets(2));
+    expect(tester.getCenter(find.byTooltip('Próxima')).dy, next, reason: 'abrir o volume não mexe nos controles');
+
+    await tester.drag(find.byType(Slider).last, const Offset(-200, 0));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(pc.volume, lessThan(0.5), reason: 'o volume chega ao PC');
+
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(Slider), findsOneWidget, reason: 'fechou depois de 5 s parado');
+    await tester.pumpWidget(const SizedBox());
   });
 }
