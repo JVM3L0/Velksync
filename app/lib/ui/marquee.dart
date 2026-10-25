@@ -9,9 +9,12 @@ class MarqueeText extends StatefulWidget {
   final String text;
   final TextStyle? style;
 
+  /// Onde o texto fica quando cabe (rolando, sempre começa da esquerda).
+  final TextAlign textAlign;
+
   /// Velocidade da rolagem, em pixels lógicos por segundo.
   final double speed;
-  const MarqueeText(this.text, {super.key, this.style, this.speed = 36});
+  const MarqueeText(this.text, {super.key, this.style, this.speed = 36, this.textAlign = TextAlign.center});
 
   @override
   State<MarqueeText> createState() => _MarqueeTextState();
@@ -83,7 +86,7 @@ class _MarqueeTextState extends State<MarqueeText> with SingleTickerProviderStat
             style: style,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
+            textAlign: widget.textAlign,
           );
         }
         final travel = overflow + _fade;

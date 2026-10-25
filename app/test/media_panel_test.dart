@@ -56,7 +56,7 @@ void main() {
     expect(find.text('Numb'), findsOneWidget);
 
     final center = tester.getCenter(find.text('Numb')).dx;
-    await tester.drag(find.text('Numb'), const Offset(-250, 0));
+    await tester.drag(find.byType(MediaCover), const Offset(-250, 0));
     // O app relê o PC logo depois do comando: a faixa nova já está entrando.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 32));
@@ -75,7 +75,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.timedDrag(find.text('Numb'), const Offset(-40, 0), const Duration(seconds: 1));
+    await tester.timedDrag(find.byType(MediaCover), const Offset(-40, 0), const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
     expect(pc.sent, isEmpty);
     expect(find.text('Numb'), findsOneWidget);
@@ -116,16 +116,21 @@ void main() {
     await tester.tap(find.byTooltip('Volume'));
     await tester.pump(); // a animação de abrir começa neste quadro
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(Slider), findsNWidgets(2));
+    expect(find.byType(VerticalVolume), findsOneWidget);
     expect(tester.getCenter(find.byTooltip('Próxima')).dy, next, reason: 'abrir o volume não mexe nos controles');
 
-    await tester.drag(find.byType(Slider).last, const Offset(-200, 0));
+    final volume = find.byKey(const ValueKey('volume'));
+    expect(volume, findsOneWidget);
+    final pill = find.ancestor(of: volume, matching: find.byType(Material)).first;
+    expect(tester.getSize(pill).height, inInclusiveRange(200, 260), reason: 'pílula vertical, sem esticar pela tela');
+    expect(tester.getSize(pill).width, lessThan(80));
+    await tester.drag(volume, const Offset(0, 80)); // para baixo = mais baixo
     await tester.pump(const Duration(milliseconds: 300));
     expect(pc.volume, lessThan(0.5), reason: 'o volume chega ao PC');
 
     await tester.pump(const Duration(seconds: 6));
     await tester.pump(const Duration(milliseconds: 600));
-    expect(find.byType(Slider), findsOneWidget, reason: 'fechou depois de 5 s parado');
+    expect(find.byType(VerticalVolume), findsNothing, reason: 'fechou depois de 5 s parado');
     await tester.pumpWidget(const SizedBox());
   });
 }

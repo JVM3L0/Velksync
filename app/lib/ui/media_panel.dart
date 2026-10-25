@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -19,8 +20,10 @@ String formatTime(int ms) {
   return '${h > 0 ? '$h:' : ''}$mm:${sec.toString().padLeft(2, '0')}';
 }
 
-/// Aba de mídia: o que está tocando no PC, com controles, no estilo do player
-/// do Caelestia. Só consulta o PC enquanto está na tela: com [live], o agente
+/// Aba de mídia: o que está tocando no PC. O layout segue os players de
+/// referência (Spotify, YouTube Music, Apple Music, Android 16): capa grande
+/// no formato original, fundo com as cores dela, texto à esquerda e controles
+/// fixos embaixo. Só consulta o PC enquanto está na tela: com [live], o agente
 /// avisa quando algo muda; sem, pergunta a cada segundo (agentes antigos).
 class MediaPanel extends StatefulWidget {
   final AgentClient client;
@@ -46,8 +49,12 @@ class _MediaPanelState extends State<MediaPanel> {
   int _direction = 1; // 1 próxima, -1 anterior
   double _dragDx = 0; // arrasto da capa com o dedo
   bool _dragging = false;
-  bool _volumeOpen = false; // slider de volume à mostra
   Timer? _volumeHide;
+  final _volumeLink = LayerLink();
+  final _volumePopup = OverlayPortalController(); // balão do volume
+  // Formato e cores da capa atual (16:9 em vídeos; cores pastel para o fundo).
+  double _artAspect = 1;
+  (ColorScheme, ColorScheme)? _artSchemes;
 
   AgentClient get _c => widget.client;
 
@@ -121,7 +128,10 @@ class _MediaPanelState extends State<MediaPanel> {
       // A capa nova chega antes de a faixa entrar na tela: assim ela já
       // desliza com a capa certa, sem trocar de imagem no meio.
       art = st.artId.isEmpty ? null : await _c.mediaArt().timeout(const Duration(seconds: 3), onTimeout: () => null);
+      final look = art == null ? null : await _analyzeArt(art);
       if (!mounted || !identical(_smoother.shown, st)) return; // chegou estado mais novo
+      _artAspect = look?.aspect ?? 1;
+      _artSchemes = look?.schemes;
     }
     setState(() {
       if (!identical(st, _state)) _stamp = DateTime.now();
@@ -134,6 +144,24 @@ class _MediaPanelState extends State<MediaPanel> {
       _artId = st.artId;
       _art = art;
     });
+  }
+
+  /// Proporção da capa e esquemas de cor (claro, escuro) tirados dela, no
+  /// estilo tonal spot: pastel, combinando com os temas suaves.
+  static Future<({double aspect, (ColorScheme, ColorScheme)? schemes})?> _analyzeArt(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final aspect = frame.image.width / frame.image.height;
+      frame.image.dispose();
+      codec.dispose();
+      final provider = MemoryImage(bytes);
+      final light = await ColorScheme.fromImageProvider(provider: provider);
+      final dark = await ColorScheme.fromImageProvider(provider: provider, brightness: Brightness.dark);
+      return (aspect: aspect, schemes: (light, dark));
+    } on Exception {
+      return null; // imagem que não decodifica: segue com a capa padrão
+    }
   }
 
   static String _trackKey(MediaState s) => s.available ? '${s.title}|${s.artist}|${s.album}' : '';
@@ -200,32 +228,20 @@ class _MediaPanelState extends State<MediaPanel> {
   void _keepVolumeOpen() {
     _volumeHide?.cancel();
     _volumeHide = Timer(const Duration(seconds: 5), () {
-      if (mounted && _dragVolume == null) setState(() => _volumeOpen = false);
+      if (mounted && _dragVolume == null) _closeVolume();
     });
   }
 
-  void _toggleVolume() {
-    setState(() => _volumeOpen = !_volumeOpen);
-    if (_volumeOpen) {
-      _keepVolumeOpen();
-    } else {
-      _volumeHide?.cancel();
-    }
+  void _toggleVolume() => _volumePopup.isShowing ? _closeVolume() : _openVolume();
+
+  void _openVolume() {
+    setState(_volumePopup.show);
+    _keepVolumeOpen();
   }
 
-  Widget _volumeButton(MediaState st, ColorScheme scheme) {
-    final muted = st.muted ?? false;
-    final v = _dragVolume ?? st.volume ?? 0;
-    return IconButton(
-      tooltip: 'Volume',
-      isSelected: _volumeOpen,
-      style: IconButton.styleFrom(
-        backgroundColor: _volumeOpen ? scheme.secondaryContainer : null,
-        minimumSize: const Size(48, 48),
-      ),
-      onPressed: _toggleVolume,
-      icon: Icon(_volumeIcon(muted, v), fill: 1, color: muted ? scheme.error : scheme.onSurfaceVariant),
-    );
+  void _closeVolume() {
+    _volumeHide?.cancel();
+    if (_volumePopup.isShowing) setState(_volumePopup.hide);
   }
 
   static IconData _volumeIcon(bool muted, double v) => muted
@@ -246,70 +262,86 @@ class _MediaPanelState extends State<MediaPanel> {
     }
   }
 
+  void _toggleMute(MediaState st) {
+    final muted = st.muted ?? false;
+    setState(() => _state = MediaState.fromJson({..._json(st), 'muted': !muted}));
+    _run(() => _c.mediaVolume(muted: !muted));
+  }
+
   @override
   Widget build(BuildContext context) {
     final st = _state;
-    final scheme = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
     if (st == null) return const Center(child: CircularProgressIndicator());
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-      children: [
-        _track(st, scheme, text),
-        if (st.available) ...[
-          const SizedBox(height: 16),
-          _progress(st, scheme, text),
-          const SizedBox(height: 8),
-          _controls(st, scheme),
-        ],
-        const SizedBox(height: 16),
-        // Embaixo de tudo: abrir o volume não empurra os controles.
-        Row(
-          children: [
-            if (st.available && st.player.isNotEmpty) Flexible(child: _playerChip(st.player, scheme, text)),
-            const Spacer(),
-            if (st.volume != null) _volumeButton(st, scheme),
-          ],
-        ),
-        AnimatedSize(
-          duration: Motion.spatialDuration,
-          curve: Motion.spatial,
-          alignment: Alignment.topCenter,
-          child: _volumeOpen && st.volume != null
-              ? Padding(padding: const EdgeInsets.only(top: 8), child: _volume(st, scheme))
-              : const SizedBox(width: double.infinity),
-        ),
-      ],
+    final base = Theme.of(context);
+    final dark = base.brightness == Brightness.dark;
+    final schemes = _artSchemes;
+    final scheme = schemes == null || !st.available ? base.colorScheme : (dark ? schemes.$2 : schemes.$1);
+    // As cores da capa valem só aqui dentro; trocam suavemente entre faixas.
+    return AnimatedTheme(
+      // Barras finas, como nos players (o padrão do M3 Expressive é 16 px).
+      data: base.copyWith(colorScheme: scheme, sliderTheme: base.sliderTheme.copyWith(trackHeight: 6)),
+      duration: Motion.spatialDuration,
+      curve: Motion.effects,
+      child: Builder(builder: (context) => _player(context, st)),
     );
   }
 
-  /// Capa e título da faixa. Desliza para o lado da troca (como Spotify e
-  /// YouTube Music) e dá para arrastar a capa para pular de faixa.
-  Widget _track(MediaState st, ColorScheme scheme, TextTheme text) {
-    final swipe = st.available && st.canControl;
-    final block = Column(
-      children: [
-        MediaCover(art: st.available ? _art : null, artId: _artId, available: st.available, playing: st.playing),
-        const SizedBox(height: 24),
-        if (st.available) ...[
-          // Uma linha cada, sempre: os controles não descem com títulos longos.
-          MarqueeText(
-            st.title.isEmpty ? 'Sem título' : st.title,
-            style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          MarqueeText(
-            st.artist.isEmpty ? ' ' : st.artist,
-            style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ] else
-          Text(
-            'Nada tocando no PC',
-            textAlign: TextAlign.center,
-            style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-      ],
+  Widget _player(BuildContext context, MediaState st) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return DecoratedBox(
+      // Degradê com a cor da capa em cima, como no YouTube Music e no Android 16.
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color.alphaBlend(scheme.primaryContainer.withValues(alpha: 0.85), scheme.surface), scheme.surface],
+          stops: const [0, 0.8],
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final bottom = Column(
+            children: [
+              const SizedBox(height: 24),
+              _titles(st, scheme, text),
+              const SizedBox(height: 12),
+              if (st.available) _progress(st, scheme, text),
+              const SizedBox(height: 4),
+              _controls(st, scheme),
+            ],
+          );
+          const pad = EdgeInsets.fromLTRB(24, 16, 24, 20);
+          // Tela baixa (paisagem, fonte grande): rola, com a capa num tamanho fixo.
+          if (box.maxHeight < 560) {
+            return SingleChildScrollView(
+              padding: pad,
+              child: Column(children: [_cover(st, (box.maxWidth - 48).clamp(0.0, 280.0)), bottom]),
+            );
+          }
+          // Senão, tudo na tela: a capa fica com exatamente o espaço que sobra.
+          return Padding(
+            padding: pad,
+            child: Column(
+              children: [
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, area) => Center(child: _cover(st, area.maxHeight.clamp(0.0, area.maxWidth))),
+                  ),
+                ),
+                bottom,
+              ],
+            ),
+          );
+        },
+      ),
     );
+  }
+
+  /// Capa: desliza para o lado da troca (como Spotify e YouTube Music) e dá
+  /// para arrastá-la com o dedo para pular de faixa.
+  Widget _cover(MediaState st, double side) {
+    final swipe = st.available && st.canControl;
     return GestureDetector(
       onHorizontalDragStart: swipe ? (_) => setState(() => _dragging = true) : null,
       // Com resistência: a capa acompanha o dedo, mas um pouco atrás.
@@ -333,81 +365,145 @@ class _MediaPanelState extends State<MediaPanel> {
         duration: _dragging ? Duration.zero : Motion.spatialFastDuration,
         curve: Motion.spatial,
         transform: Matrix4.translationValues(_dragDx, 0, 0),
-        child: SharedAxisSwitcher(index: _trackIndex, distance: 160, child: block),
+        child: SharedAxisSwitcher(
+          index: _trackIndex,
+          distance: 160,
+          child: MediaCover(
+            art: st.available ? _art : null,
+            artId: _artId,
+            available: st.available,
+            playing: st.playing,
+            side: side,
+            aspect: _artAspect,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _playerChip(String player, ColorScheme scheme, TextTheme text) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    decoration: ShapeDecoration(color: scheme.surfaceContainerHigh, shape: const StadiumBorder()),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+  /// App que toca, título e artista à esquerda, uma linha cada: títulos longos
+  /// rolam em vez de empurrar os controles.
+  Widget _titles(MediaState st, ColorScheme scheme, TextTheme text) {
+    final muted = text.labelLarge?.copyWith(color: scheme.onSurfaceVariant);
+    final info = SharedAxisSwitcher(
+      index: _trackIndex,
+      distance: 48,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sempre ocupa a linha (mesmo vazia): o layout não pula quando o player some.
+            Row(
+              children: [
+                Icon(
+                  Symbols.speaker_rounded,
+                  size: 16,
+                  fill: 1,
+                  color: st.available && st.player.isNotEmpty ? scheme.primary : Colors.transparent,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    st.available ? st.player : '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: muted,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            MarqueeText(
+              st.available ? (st.title.isEmpty ? 'Sem título' : st.title) : 'Nada tocando',
+              textAlign: TextAlign.start,
+              style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 2),
+            MarqueeText(
+              st.available ? (st.artist.isEmpty ? ' ' : st.artist) : 'Dê play em algo no PC',
+              textAlign: TextAlign.start,
+              style: text.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+    // O botão de volume fica fora da animação de troca: não desliza com a faixa.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Icon(Symbols.speaker_rounded, size: 16, color: scheme.primary),
-        const SizedBox(width: 6),
-        Text(player, style: text.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+        Expanded(child: info),
+        const SizedBox(width: 8),
+        _volumeButton(st, scheme),
       ],
-    ),
-  );
+    );
+  }
 
+  /// Barra fina do Material 3 Expressive, alinhada às bordas do conteúdo.
   Widget _progress(MediaState st, ColorScheme scheme, TextTheme text) {
     final dur = st.durationMs;
     final pos = _dragPosition?.round() ?? _position;
     final enabled = st.canSeek && dur > 0;
+    final time = text.labelMedium?.copyWith(
+      color: scheme.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     return Column(
       children: [
-        Slider(
-          value: dur > 0 ? pos.clamp(0, dur).toDouble() : 0,
-          max: dur > 0 ? dur.toDouble() : 1,
-          onChanged: enabled ? (v) => setState(() => _dragPosition = v) : null,
-          onChangeEnd: enabled
-              ? (v) {
-                  setState(() {
-                    _dragPosition = null;
-                    _state = MediaState.fromJson({..._json(st), 'position_ms': v.round()});
-                    _stamp = DateTime.now();
-                  });
-                  _run(() => _c.mediaSeek(v.round()));
-                }
-              : null,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(formatTime(pos), style: text.labelMedium?.copyWith(color: scheme.onSurfaceVariant)),
-              Text(
-                dur > 0 ? formatTime(dur) : '--:--',
-                style: text.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-            ],
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(padding: EdgeInsets.zero),
+          child: Slider(
+            // ignore: deprecated_member_use
+            year2023: false,
+            value: dur > 0 ? pos.clamp(0, dur).toDouble() : 0,
+            max: dur > 0 ? dur.toDouble() : 1,
+            onChanged: enabled ? (v) => setState(() => _dragPosition = v) : null,
+            onChangeEnd: enabled
+                ? (v) {
+                    setState(() {
+                      _dragPosition = null;
+                      _state = MediaState.fromJson({..._json(st), 'position_ms': v.round()});
+                      _stamp = DateTime.now();
+                    });
+                    _run(() => _c.mediaSeek(v.round()));
+                  }
+                : null,
           ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(formatTime(pos), style: time),
+            Text(dur > 0 ? formatTime(dur) : '--:--', style: time),
+          ],
         ),
       ],
     );
   }
 
+  /// Anterior, play e próxima, centralizados.
   Widget _controls(MediaState st, ColorScheme scheme) {
-    final enabled = st.canControl;
+    final enabled = st.available && st.canControl;
+    final skip = IconButton.styleFrom(minimumSize: const Size(72, 72), foregroundColor: scheme.onSurface);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        IconButton.filledTonal(
+        IconButton(
           tooltip: 'Anterior',
-          iconSize: 30,
-          style: IconButton.styleFrom(minimumSize: const Size(64, 64)),
+          iconSize: 40,
+          style: skip,
           onPressed: enabled ? () => _skip('previous') : null,
           icon: const Icon(Symbols.skip_previous_rounded, fill: 1),
         ),
-        const SizedBox(width: 20),
+        const SizedBox(width: 24),
         _PlayButton(playing: st.playing, onPressed: enabled ? _playPause : null),
-        const SizedBox(width: 20),
-        IconButton.filledTonal(
+        const SizedBox(width: 24),
+        IconButton(
           tooltip: 'Próxima',
-          iconSize: 30,
-          style: IconButton.styleFrom(minimumSize: const Size(64, 64)),
+          iconSize: 40,
+          style: skip,
           onPressed: enabled ? () => _skip('next') : null,
           icon: const Icon(Symbols.skip_next_rounded, fill: 1),
         ),
@@ -415,40 +511,191 @@ class _MediaPanelState extends State<MediaPanel> {
     );
   }
 
-  Widget _volume(MediaState st, ColorScheme scheme) {
+  /// Único botão de som: mostra o nível e abre o balão com o slider e o mudo.
+  Widget _volumeButton(MediaState st, ColorScheme scheme) {
     final muted = st.muted ?? false;
-    final v = _dragVolume ?? st.volume ?? 0;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          children: [
-            IconButton(
-              tooltip: muted ? 'Ativar som' : 'Mudo',
-              onPressed: () {
-                _keepVolumeOpen();
-                setState(() => _state = MediaState.fromJson({..._json(st), 'muted': !muted}));
-                _run(() => _c.mediaVolume(muted: !muted));
-              },
-              icon: Icon(_volumeIcon(muted, v), fill: 1, color: muted ? scheme.error : scheme.primary),
-            ),
-            Expanded(
-              child: Slider(
-                value: v.clamp(0, 1),
-                onChanged: _volumeChanged,
-                onChangeEnd: (x) {
-                  _keepVolumeOpen();
-                  setState(() {
-                    _dragVolume = null;
-                    _state = MediaState.fromJson({..._json(st), 'volume': x});
-                  });
-                  _run(() => _c.mediaVolume(volume: x));
-                },
+    return _volumeAnchor(
+      st,
+      IconButton(
+        tooltip: 'Volume',
+        style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+        isSelected: _volumePopup.isShowing,
+        onPressed: st.volume != null ? _toggleVolume : null,
+        icon: Icon(
+          _volumeIcon(muted, _dragVolume ?? st.volume ?? 0),
+          fill: 1,
+          color: muted ? scheme.error : scheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  /// Pílula do volume: nasce do próprio botão (morph do M3 Expressive) e
+  /// cresce para cima, por cima da capa, sem empurrar nada. Fecha ao tocar
+  /// fora ou depois de 5 s parado.
+  Widget _volumeAnchor(MediaState st, Widget button) => CompositedTransformTarget(
+    link: _volumeLink,
+    child: OverlayPortal(
+      controller: _volumePopup,
+      overlayChildBuilder: (context) => CompositedTransformFollower(
+        link: _volumeLink,
+        targetAnchor: Alignment.bottomCenter,
+        followerAnchor: Alignment.bottomCenter,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: TapRegion(onTapOutside: (_) => _closeVolume(), child: _volumePill(st)),
+        ),
+      ),
+      child: button,
+    ),
+  );
+
+  Widget _volumePill(MediaState st) {
+    final scheme = Theme.of(context).colorScheme;
+    final muted = st.muted ?? false;
+    final v = (_dragVolume ?? st.volume ?? 0).clamp(0.0, 1.0);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Motion.spatialDuration,
+      curve: Motion.spatial,
+      builder: (context, t, child) => SizedBox(
+        // Do tamanho do botão (48) até a pílula inteira (64 × 248).
+        width: 48 + 16 * t.clamp(0.0, 1.0),
+        height: 48 + 200 * t,
+        child: child,
+      ),
+      child: Material(
+        color: scheme.surfaceContainerHigh,
+        elevation: 4,
+        shadowColor: scheme.shadow,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        // Pequena (começo da animação), é só o ícone; crescida, o controle todo.
+        child: LayoutBuilder(
+          builder: (context, box) => box.maxHeight < 140
+              ? Center(child: Icon(_volumeIcon(muted, v), fill: 1, color: scheme.primary))
+              : Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    children: [
+                      Text(
+                        '${(v * 100).round()}%',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(fontWeight: FontWeight.w600, fontFeatures: const [FontFeature.tabularFigures()]),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: VerticalVolume(
+                          key: const ValueKey('volume'),
+                          value: v,
+                          muted: muted,
+                          onChanged: _volumeChanged,
+                          onChangeEnd: (x) {
+                            _keepVolumeOpen();
+                            setState(() {
+                              _dragVolume = null;
+                              _state = MediaState.fromJson({..._json(st), 'volume': x});
+                            });
+                            _run(() => _c.mediaVolume(volume: x));
+                          },
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: muted ? 'Ativar som' : 'Mudo',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                        onPressed: () {
+                          _keepVolumeOpen();
+                          _toggleMute(st);
+                        },
+                        icon: Icon(_volumeIcon(muted, v), fill: 1, color: muted ? scheme.error : scheme.primary),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Barra de volume vertical: a área inteira é o controle (toque ou arraste),
+/// preenchida de baixo para cima. Anunciada como controle ajustável.
+class VerticalVolume extends StatefulWidget {
+  final double value;
+  final bool muted;
+  final ValueChanged<double> onChanged, onChangeEnd;
+  const VerticalVolume({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.onChangeEnd,
+    this.muted = false,
+  });
+
+  @override
+  State<VerticalVolume> createState() => _VerticalVolumeState();
+}
+
+class _VerticalVolumeState extends State<VerticalVolume> {
+  static const _step = 0.05;
+  double? _last;
+
+  double _at(Offset local, double height) => (1 - local.dy / height).clamp(0.0, 1.0);
+
+  void _set(double v) {
+    _last = v;
+    widget.onChanged(v);
+  }
+
+  void _end() {
+    final v = _last;
+    _last = null;
+    if (v != null) widget.onChangeEnd(v);
+  }
+
+  void _nudge(double delta) {
+    final v = (widget.value + delta).clamp(0.0, 1.0);
+    widget.onChanged(v);
+    widget.onChangeEnd(v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final pct = (widget.value * 100).round();
+    return Semantics(
+      slider: true,
+      label: 'Volume do PC',
+      value: '$pct%',
+      increasedValue: '${((widget.value + _step).clamp(0.0, 1.0) * 100).round()}%',
+      decreasedValue: '${((widget.value - _step).clamp(0.0, 1.0) * 100).round()}%',
+      onIncrease: () => _nudge(_step),
+      onDecrease: () => _nudge(-_step),
+      child: LayoutBuilder(
+        builder: (context, box) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (d) => _set(_at(d.localPosition, box.maxHeight)),
+          onTapUp: (_) => _end(),
+          onVerticalDragStart: (d) => _set(_at(d.localPosition, box.maxHeight)),
+          onVerticalDragUpdate: (d) => _set(_at(d.localPosition, box.maxHeight)),
+          onVerticalDragEnd: (_) => _end(),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(Radii.lgPlus),
+            child: ColoredBox(
+              color: scheme.surfaceContainerHighest,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: AnimatedFractionallySizedBox(
+                  duration: _last == null ? Motion.spatialFastDuration : Duration.zero,
+                  curve: Motion.effects,
+                  widthFactor: 1,
+                  heightFactor: widget.value,
+                  child: ColoredBox(color: widget.muted ? scheme.outline : scheme.primary),
+                ),
               ),
             ),
-            SizedBox(width: 44, child: Text('${(v * 100).round()}%', textAlign: TextAlign.end)),
-            const SizedBox(width: 8),
-          ],
+          ),
         ),
       ),
     );
@@ -510,22 +757,60 @@ class _PlayButtonState extends State<_PlayButton> {
   }
 }
 
-/// Capa quadrada do que está tocando; sem capa, um formato que muda de
-/// forma conforme toca ou não.
+/// Capa no formato original (quadrada para álbuns, 16:9 para vídeos), dentro
+/// de uma área de altura fixa [side]: trocar de faixa não mexe no layout. Sem
+/// capa, um formato que muda de forma conforme toca ou não.
 class MediaCover extends StatelessWidget {
   final Uint8List? art;
   final String artId;
   final bool available, playing;
-  const MediaCover({super.key, this.art, this.artId = '', this.available = true, this.playing = false});
+  final double side;
+
+  /// Largura / altura da imagem.
+  final double aspect;
+  const MediaCover({
+    super.key,
+    this.art,
+    this.artId = '',
+    this.available = true,
+    this.playing = false,
+    this.side = 360,
+    this.aspect = 1,
+  });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 360),
-        child: AspectRatio(aspectRatio: 1, child: _art(scheme)),
-      ),
+    return LayoutBuilder(
+      builder: (context, box) {
+        final maxW = box.maxWidth.isFinite ? box.maxWidth : side;
+        final wide = art != null && aspect > 1.15;
+        final w = wide ? (side * aspect).clamp(0.0, maxW) : side.clamp(0.0, maxW);
+        final h = wide ? w / aspect : w;
+        return SizedBox(
+          height: side,
+          width: double.infinity,
+          child: Center(
+            child: SizedBox(
+              width: w,
+              height: h,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(Radii.xl),
+                  boxShadow: [
+                    BoxShadow(
+                      color: scheme.shadow.withValues(alpha: 0.25),
+                      blurRadius: 32,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: _art(scheme),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
