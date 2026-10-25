@@ -68,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _refresh() async {
     await Future.wait(
-      _devices.map((d) async {
+      _devices.where((d) => d.paired).map((d) async {
         final client = AgentClient(d);
         AgentInfo? info;
         try {
@@ -89,7 +89,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _save(Device d) async {
-    final i = _devices.indexWhere((x) => x.id == d.id);
+    var i = _devices.indexWhere((x) => x.id == d.id);
+    // Parear de novo um PC já cadastrado (mesmo MAC) atualiza o cadastro em
+    // vez de duplicar; no dual boot é o mesmo PC.
+    if (i < 0 && d.mac.isNotEmpty) {
+      i = _devices.indexWhere((x) => x.mac.toLowerCase() == d.mac.toLowerCase());
+      if (i >= 0) {
+        await _store.forget(_devices[i]);
+        _status.remove(_devices[i].id);
+      }
+    }
     setState(() => i < 0 ? _devices.add(d) : _devices[i] = d);
     await _store.save(_devices);
     _events.update(_devices);
@@ -100,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _devices.removeWhere((x) => x.id == d.id);
       _status.remove(d.id);
     });
+    await _store.forget(d);
     await _store.save(_devices);
     _events.update(_devices);
   }
@@ -127,7 +137,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  PcStatus _statusOf(Device d) => !_status.containsKey(d.id)
+  PcStatus _statusOf(Device d) => !d.paired
+      ? PcStatus.unpaired
+      : !_status.containsKey(d.id)
       ? PcStatus.checking
       : _status[d.id] != null
       ? PcStatus.online
@@ -256,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 duration: Motion.spatialFastDuration,
                 switchInCurve: Motion.spatialFast,
                 transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
-                child: status == PcStatus.offline && d.mac.isNotEmpty
+                child: (status == PcStatus.offline || status == PcStatus.unpaired) && d.mac.isNotEmpty
                     ? IconButton.filled(
                         key: const ValueKey('wake'),
                         tooltip: 'Ligar',

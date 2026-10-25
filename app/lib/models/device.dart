@@ -3,28 +3,55 @@ class Device {
   final String name;
   final String host;
   final int port;
-  final String token;
   final String mac;
   final String broadcast;
+
+  /// Hash SHA-256 da chave pública do certificado do agente (vem do QR).
+  final String pin;
+
+  /// Credencial própria deste celular, revogável no PC. O token fica no
+  /// armazenamento seguro, nunca no JSON das preferências.
+  final String deviceId;
+  final String token;
 
   const Device({
     required this.id,
     required this.name,
     required this.host,
     this.port = 41100,
-    required this.token,
     this.mac = '',
     this.broadcast = '255.255.255.255',
+    this.pin = '',
+    this.deviceId = '',
+    this.token = '',
   });
 
-  Device copyWith({String? name, String? host, int? port, String? token, String? mac, String? broadcast}) => Device(
+  /// Sem pareamento só dá para ligar (Wake-on-LAN não precisa de credencial).
+  bool get paired => pin.isNotEmpty && deviceId.isNotEmpty && token.isNotEmpty;
+
+  String get shortPin => pin.length < 16
+      ? pin
+      : '${pin.substring(0, 4)} ${pin.substring(4, 8)} ${pin.substring(8, 12)} ${pin.substring(12, 16)}';
+
+  Device copyWith({
+    String? name,
+    String? host,
+    int? port,
+    String? mac,
+    String? broadcast,
+    String? pin,
+    String? deviceId,
+    String? token,
+  }) => Device(
     id: id,
     name: name ?? this.name,
     host: host ?? this.host,
     port: port ?? this.port,
-    token: token ?? this.token,
     mac: mac ?? this.mac,
     broadcast: broadcast ?? this.broadcast,
+    pin: pin ?? this.pin,
+    deviceId: deviceId ?? this.deviceId,
+    token: token ?? this.token,
   );
 
   Map<String, dynamic> toJson() => {
@@ -32,19 +59,22 @@ class Device {
     'name': name,
     'host': host,
     'port': port,
-    'token': token,
     'mac': mac,
     'broadcast': broadcast,
+    'pin': pin,
+    'device_id': deviceId,
   };
 
-  factory Device.fromJson(Map<String, dynamic> j) => Device(
+  factory Device.fromJson(Map<String, dynamic> j, {String token = ''}) => Device(
     id: j['id'] as String,
     name: j['name'] as String,
     host: j['host'] as String,
     port: j['port'] as int? ?? 41100,
-    token: j['token'] as String,
     mac: j['mac'] as String? ?? '',
     broadcast: j['broadcast'] as String? ?? '255.255.255.255',
+    pin: j['pin'] as String? ?? '',
+    deviceId: j['device_id'] as String? ?? '',
+    token: token,
   );
 }
 

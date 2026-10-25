@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
 import '../models/device.dart';
+import 'pinning.dart';
 
 class AgentException implements Exception {
   final String message;
@@ -12,16 +14,20 @@ class AgentException implements Exception {
   String toString() => message;
 }
 
-/// Talks to velksync-agent running on the PC.
+/// Talks to velksync-agent running on the PC over HTTPS pinned to the key from
+/// the pairing QR. Unpaired devices (Wake-on-LAN only) can't make requests.
 class AgentClient {
   final Device device;
-  final http.Client _http = http.Client();
+  late final http.Client _http = pinnedClient(device.pin);
 
   AgentClient(this.device);
 
-  Uri _uri(String path) => Uri(scheme: 'http', host: device.host, port: device.port, path: path);
+  Uri _uri(String path) => Uri(scheme: 'https', host: device.host, port: device.port, path: path);
 
-  Map<String, String> get _headers => {'Authorization': 'Bearer ${device.token}', 'Content-Type': 'application/json'};
+  Map<String, String> get _headers => {
+    if (device.deviceId.isNotEmpty) 'Authorization': 'Bearer ${device.deviceId}:${device.token}',
+    'Content-Type': 'application/json',
+  };
 
   Future<dynamic> _send(
     String method,
@@ -32,10 +38,13 @@ class AgentClient {
     final req = http.Request(method, _uri(path))..headers.addAll(_headers);
     if (body != null) req.body = jsonEncode(body);
     final http.Response res;
+    if (device.pin.isEmpty) throw AgentException('PC não pareado: escaneie o QR');
     try {
       res = await http.Response.fromStream(await _http.send(req).timeout(timeout));
     } on TimeoutException {
       throw AgentException('PC não respondeu');
+    } on HandshakeException {
+      throw AgentException('Certificado do PC não confere: pareie de novo pelo QR');
     } on Exception catch (e) {
       throw AgentException('Sem conexão com o PC ($e)');
     }
@@ -46,13 +55,23 @@ class AgentClient {
     return data;
   }
 
-  /// Exchanges the one-time code from the pairing QR for the token. The only
-  /// call that doesn't need a token, so it lives outside an instance.
-  static Future<String> claimPairing({required String host, required int port, required String code}) async {
-    final client = AgentClient(Device(id: '', name: '', host: host, port: port, token: ''));
+  /// Exchanges the one-time code from the pairing QR for this phone's own
+  /// credential. The only call without credentials; the pin comes from the QR.
+  static Future<({String deviceId, String token})> claimPairing({
+    required String host,
+    required int port,
+    required String code,
+    required String pin,
+    required String deviceName,
+  }) async {
+    final client = AgentClient(Device(id: '', name: '', host: host, port: port, pin: pin));
     try {
-      final data = await client._send('POST', '/api/pair/claim', body: {'code': code, 'device': 'app Velksync'});
-      return (data as Map<String, dynamic>)['token'] as String;
+      final data = await client._send(
+        'POST',
+        '/api/pair/claim',
+        body: {'code': code, 'device': deviceName},
+      ) as Map<String, dynamic>;
+      return (deviceId: data['device_id'] as String, token: data['token'] as String);
     } finally {
       client.close();
     }
@@ -81,7 +100,7 @@ class AgentClient {
   /// Server-sent events from the PC. Completes when the connection drops;
   /// cancelling the subscription closes the connection right away.
   Stream<PcEvent> events() {
-    final client = http.Client();
+    final client = pinnedClient(device.pin);
     StreamSubscription<String>? lines;
     late final StreamController<PcEvent> out;
     void finish([Object? error]) {

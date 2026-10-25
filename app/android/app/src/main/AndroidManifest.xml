@@ -1,9 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- O agente fala HTTP puro dentro da rede local. -->
+    <!-- Só HTTPS (o agente usa TLS com pin), e nada de backup automático:
+         as credenciais dos PCs não podem ir para a nuvem nem para outro aparelho. -->
     <application
         android:label="Velksync"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -18,13 +18,16 @@ class PcEventListener {
   PcEventListener(this.messenger);
 
   void update(List<Device> devices) {
-    final next = {for (final d in devices) d.id: d};
+    // Só PCs pareados: sem credencial e pin não há com quem falar.
+    final next = {for (final d in devices.where((d) => d.paired)) d.id: d};
     for (final id in _devices.keys.toList()) {
       final old = _devices[id]!, now = next[id];
-      if (now == null || now.host != old.host || now.port != old.port || now.token != old.token) _stop(id);
+      if (now == null || now.host != old.host || now.port != old.port || now.token != old.token || now.pin != old.pin) {
+        _stop(id);
+      }
     }
     _devices = next;
-    for (final d in devices) {
+    for (final d in next.values) {
       if (!_subs.containsKey(d.id) && !_retries.containsKey(d.id)) _connect(d);
     }
   }

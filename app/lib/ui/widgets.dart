@@ -3,7 +3,8 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import 'theme.dart';
 
-enum PcStatus { checking, online, offline }
+/// unpaired: cadastrado sem credencial (só Wake-on-LAN) até escanear o QR.
+enum PcStatus { checking, online, offline, unpaired }
 
 /// Pill showing whether the PC answers; the dot breathes while online.
 class StatusPill extends StatelessWidget {
@@ -18,6 +19,7 @@ class StatusPill extends StatelessWidget {
       PcStatus.online => (scheme.primaryContainer, scheme.onPrimaryContainer, 'Ligado'),
       PcStatus.offline => (scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 'Desligado'),
       PcStatus.checking => (scheme.surfaceContainerHighest, scheme.onSurfaceVariant, 'Verificando'),
+      PcStatus.unpaired => (scheme.tertiaryContainer, scheme.onTertiaryContainer, 'Não pareado'),
     };
     return AnimatedContainer(
       duration: Motion.effectsDuration,

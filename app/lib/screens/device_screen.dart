@@ -30,6 +30,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   @override
   void initState() {
     super.initState();
+    if (!widget.device.paired) return; // sem credencial: só dá para ligar
     _refresh();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
   }
@@ -110,7 +111,11 @@ class _DeviceScreenState extends State<DeviceScreen> {
   Widget build(BuildContext context) {
     final d = widget.device;
     final online = _info != null;
-    final status = !_checked ? PcStatus.checking : (online ? PcStatus.online : PcStatus.offline);
+    final status = !d.paired
+        ? PcStatus.unpaired
+        : !_checked
+        ? PcStatus.checking
+        : (online ? PcStatus.online : PcStatus.offline);
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
@@ -236,16 +241,18 @@ class _DeviceScreenState extends State<DeviceScreen> {
                       PcStatus.online => 'Ligado',
                       PcStatus.offline => 'Desligado',
                       PcStatus.checking => 'Verificando…',
+                      PcStatus.unpaired => 'Não pareado',
                     },
                     key: ValueKey(status),
                     style: text.headlineMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  status == PcStatus.offline ? '$sub · ou fora da rede' : sub,
-                  style: text.bodyMedium?.copyWith(color: fg.withValues(alpha: 0.8)),
-                ),
+                Text(switch (status) {
+                  PcStatus.offline => '$sub · ou fora da rede',
+                  PcStatus.unpaired => 'Edite e escaneie o QR do PC para controlar. Ligar já funciona.',
+                  _ => sub,
+                }, style: text.bodyMedium?.copyWith(color: fg.withValues(alpha: 0.8))),
               ],
             ),
           ),

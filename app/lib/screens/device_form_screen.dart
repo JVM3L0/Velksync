@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -22,9 +25,12 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
   late final _name = TextEditingController(text: widget.device?.name);
   late final _host = TextEditingController(text: widget.device?.host);
   late final _port = TextEditingController(text: '${widget.device?.port ?? 41100}');
-  late final _token = TextEditingController(text: widget.device?.token);
   late final _mac = TextEditingController(text: widget.device?.mac);
   late final _broadcast = TextEditingController(text: widget.device?.broadcast ?? '255.255.255.255');
+  // Credencial vem só do QR (pin do certificado + credencial deste celular).
+  late String _pin = widget.device?.pin ?? '';
+  late String _deviceId = widget.device?.deviceId ?? '';
+  late String _deviceToken = widget.device?.token ?? '';
   List<DiscoveredPc>? _found;
   bool _searching = false;
   bool _testing = false;
@@ -56,49 +62,79 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
     if (parts.length == 4) _broadcast.text = '${parts.take(3).join('.')}.255';
   }
 
+  static Future<String> _phoneName() async {
+    try {
+      if (Platform.isAndroid) {
+        final a = await DeviceInfoPlugin().androidInfo;
+        return '${a.manufacturer} ${a.model}';
+      }
+    } catch (_) {}
+    return 'celular';
+  }
+
   Future<void> _scan() async {
     final link = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const ScanScreen()));
     if (link == null || !mounted) return;
     final q = Uri.parse(link).queryParameters;
+    final code = q['code'] ?? '', pin = q['fp'] ?? '';
+    if (code.isEmpty || pin.length != 64) {
+      _snack('QR de uma versão antiga do agente: atualize o agente no PC');
+      return;
+    }
+    setState(() => _testing = true);
+    try {
+      final cred = await AgentClient.claimPairing(
+        host: q['host'] ?? _host.text,
+        port: int.tryParse(q['port'] ?? '') ?? 41100,
+        code: code,
+        pin: pin,
+        deviceName: await _phoneName(),
+      );
+      _pin = pin;
+      _deviceId = cred.deviceId;
+      _deviceToken = cred.token;
+    } on AgentException catch (e) {
+      _snack(e.message);
+      return;
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+    if (!mounted) return;
     _name.text = q['name'] ?? _name.text;
     _host.text = q['host'] ?? _host.text;
     _port.text = q['port'] ?? _port.text;
-    final code = q['code'];
-    if (code != null) {
-      setState(() => _testing = true);
-      try {
-        _token.text = await AgentClient.claimPairing(
-          host: _host.text,
-          port: int.tryParse(_port.text) ?? 41100,
-          code: code,
-        );
-      } on AgentException catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-        return;
-      } finally {
-        if (mounted) setState(() => _testing = false);
-      }
-      if (!mounted) return;
-    }
     if ((q['mac'] ?? '').isNotEmpty) _mac.text = q['mac']!;
     if ((q['broadcast'] ?? '').isNotEmpty) _broadcast.text = q['broadcast']!;
     await _submit();
   }
+
+  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 
   Device _build() => Device(
     id: widget.device?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
     name: _name.text.trim(),
     host: _host.text.trim(),
     port: int.parse(_port.text.trim()),
-    token: _token.text.trim(),
     mac: _mac.text.trim(),
     broadcast: _broadcast.text.trim(),
+    pin: _pin,
+    deviceId: _deviceId,
+    token: _deviceToken,
   );
 
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
-    setState(() => _testing = true);
     final device = _build();
+    if (!device.paired) {
+      // Sem QR: cadastro só para ligar pela rede, que precisa do MAC.
+      if (device.mac.isEmpty) {
+        _snack('Sem parear pelo QR, informe o MAC para pelo menos poder ligar o PC');
+        return;
+      }
+      Navigator.pop(context, device);
+      return;
+    }
+    setState(() => _testing = true);
     final client = AgentClient(device);
     String? error;
     var mac = device.mac;
@@ -155,8 +191,8 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [
+            _scanCard(scheme, text),
             if (!editing) ...[
-              _scanCard(scheme, text),
               SectionLabel(
                 'Na rede',
                 action: _searching
@@ -193,7 +229,7 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
                       ],
                     ),
             ],
-            SectionLabel(editing ? 'Dados' : 'Manual'),
+            SectionLabel(editing ? 'Dados' : 'Manual (só para ligar)'),
             TextFormField(
               controller: _name,
               decoration: const InputDecoration(labelText: 'Nome', prefixIcon: Icon(Symbols.label_rounded)),
@@ -225,17 +261,16 @@ class _DeviceFormScreenState extends State<DeviceFormScreen> {
               ],
             ),
             gap,
-            TextFormField(
-              controller: _token,
-              decoration: const InputDecoration(
-                labelText: 'Token',
-                prefixIcon: Icon(Symbols.key_rounded),
-                helperText: 'Rode "velksync-agent token" no PC',
+            if (_pin.isNotEmpty) ...[
+              // Para conferir com `velksync-agent fingerprint` no PC.
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                leading: Icon(Symbols.verified_user_rounded, color: scheme.primary),
+                title: const Text('Pareado com certificado'),
+                subtitle: Text(_build().shortPin, style: monoStyle(color: scheme.onSurfaceVariant)),
               ),
-              validator: (v) => (v ?? '').trim().length < 32 ? 'Token deve ter 32+ caracteres' : null,
-              obscureText: editing,
-            ),
-            gap,
+              gap,
+            ],
             TextFormField(
               controller: _mac,
               decoration: const InputDecoration(
