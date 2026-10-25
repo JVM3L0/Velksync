@@ -203,6 +203,7 @@ class HeroCard extends StatelessWidget {
   final Color accent;
   final double? temperature;
   final ({String text, double fraction})? fallback; // quando não há temperatura
+  final VoidCallback? onTap; // abre o gráfico
 
   const HeroCard({
     super.key,
@@ -213,6 +214,7 @@ class HeroCard extends StatelessWidget {
     required this.accent,
     this.temperature,
     this.fallback,
+    this.onTap,
   });
 
   @override
@@ -230,7 +232,8 @@ class HeroCard extends StatelessWidget {
         : fallback == null
         ? null
         : (icon: Symbols.memory_alt_rounded, text: fallback!.text, fraction: fallback!.fraction, color: accent);
-    return Card(
+    return _TappableCard(
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -253,9 +256,14 @@ class HeroCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              label,
-                              style: text.titleMedium?.copyWith(color: accent, fontWeight: FontWeight.w600),
+                            Row(
+                              children: [
+                                Text(
+                                  label,
+                                  style: text.titleMedium?.copyWith(color: accent, fontWeight: FontWeight.w600),
+                                ),
+                                if (onTap != null) const _ChartHint(),
+                              ],
                             ),
                             Text(
                               subLabel,
@@ -322,6 +330,7 @@ class GaugeCard extends StatelessWidget {
   final String title;
   final int used, total;
   final Color accent;
+  final VoidCallback? onTap; // abre o gráfico
 
   const GaugeCard({
     super.key,
@@ -330,6 +339,7 @@ class GaugeCard extends StatelessWidget {
     required this.used,
     required this.total,
     required this.accent,
+    this.onTap,
   });
 
   @override
@@ -337,7 +347,8 @@ class GaugeCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final fraction = total == 0 ? 0.0 : used / total;
-    return Card(
+    return _TappableCard(
+      onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
         child: Column(
@@ -348,6 +359,7 @@ class GaugeCard extends StatelessWidget {
                 Icon(icon, color: accent, fill: 1, size: 22),
                 const SizedBox(width: 8),
                 Text(title, style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                if (onTap != null) const _ChartHint(),
               ],
             ),
             const SizedBox(height: 14),
@@ -376,4 +388,33 @@ class GaugeCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Cartão que, com [onTap], vira botão com o efeito de toque.
+class _TappableCard extends StatelessWidget {
+  final VoidCallback? onTap;
+  final Widget child;
+  const _TappableCard({required this.onTap, required this.child});
+
+  @override
+  Widget build(BuildContext context) => Card(
+    clipBehavior: Clip.antiAlias,
+    child: onTap == null
+        ? child
+        : Semantics(
+            onTapHint: 'ver o gráfico',
+            child: InkWell(onTap: onTap, child: child),
+          ),
+  );
+}
+
+/// Ícone discreto ao lado do título: o cartão abre um gráfico.
+class _ChartHint extends StatelessWidget {
+  const _ChartHint();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 6),
+    child: Icon(Symbols.show_chart_rounded, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+  );
 }

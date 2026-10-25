@@ -6,10 +6,12 @@ import 'package:material_ui/material_ui.dart';
 import '../models/device.dart';
 import '../services/agent_client.dart';
 import '../services/pc_probe.dart';
+import '../services/stats_history.dart';
 import '../services/wake_tracker.dart';
 import '../ui/media_panel.dart';
 import '../ui/perf.dart';
 import '../ui/schedule.dart';
+import '../ui/stats_chart.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
 import '../ui/wake_help.dart';
@@ -34,6 +36,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   List<PresetCommand> _commands = [];
   String? _running;
   PcStats? _stats;
+  late final _history = StatsHistory.of(widget.device.id); // para o gráfico já abrir preenchido
   int _tab = 0; // 0 controle, 1 desempenho, 2 mídia
   Timer? _poll;
   Timer? _statsPoll;
@@ -46,7 +49,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
     if (!widget.device.paired) return; // sem credencial: só dá para ligar
     _refresh();
     _poll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
-    // Desempenho só enquanto esta tela está aberta e o PC responde.
+    // Desempenho só enquanto esta tela está aberta e o PC responde (em
+    // qualquer aba: o histórico do gráfico vai enchendo).
     _statsPoll = Timer.periodic(const Duration(seconds: 2), (_) => _refreshStats());
   }
 
@@ -61,14 +65,14 @@ class _DeviceScreenState extends State<DeviceScreen> {
   }
 
   Future<void> _refreshStats() async {
-    if (_tab != 1 || _liveStats != null) return; // só com a aba visível e sem canal ao vivo
+    if (_liveStats != null) return; // o canal ao vivo já entrega
     if (_info == null) {
       if (_stats != null) setState(() => _stats = null);
       return;
     }
     try {
       final stats = await _client.stats();
-      if (mounted) setState(() => _stats = stats);
+      if (mounted) _gotStats(stats);
     } on AgentException {
       // agente antigo sem /api/stats ou queda momentânea: mantém o último
     }
@@ -102,15 +106,25 @@ class _DeviceScreenState extends State<DeviceScreen> {
     _syncLiveStats();
   }
 
-  /// Abre o canal ao vivo só com a aba Desempenho visível; se cair, o polling
-  /// assume e o próximo _refresh tenta de novo.
+  void _gotStats(PcStats s) {
+    _history.add(s);
+    // Fora da aba Desempenho só guarda: não precisa redesenhar a tela.
+    if (_tab == 1) {
+      setState(() => _stats = s);
+    } else {
+      _stats = s;
+    }
+  }
+
+  /// Abre o canal ao vivo enquanto o PC responde; se cair, o polling assume
+  /// e o próximo _refresh tenta de novo.
   void _syncLiveStats() {
-    final want = _tab == 1 && (_info?.has('live') ?? false);
+    final want = _info?.has('live') ?? false;
     if (want && _liveStats == null) {
       void lost([Object? _]) => _liveStats = null;
       _liveStats = _client.liveStats().listen(
         (s) {
-          if (mounted) setState(() => _stats = s);
+          if (mounted) _gotStats(s);
         },
         onError: lost,
         onDone: lost,
@@ -236,8 +250,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 selectedIndex: _tab,
                 onDestinationSelected: (i) {
                   setState(() => _tab = i);
-                  _syncLiveStats();
-                  if (i == 1) _refreshStats();
                 },
                 destinations: const [
                   NavigationDestination(
@@ -487,6 +499,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
           usage: s.cpuPercent / 100,
           accent: scheme.primary,
           temperature: s.cpuTemp,
+          onTap: () => showStatsSheet(context, _history, Metric.cpu),
         ),
         if (gpu != null) ...[
           const SizedBox(height: 10),
@@ -496,6 +509,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
             subLabel: gpu.name,
             usage: gpu.percent / 100,
             accent: scheme.secondary,
+            onTap: () => showStatsSheet(context, _history, Metric.gpu),
             temperature: gpu.temp,
             fallback: gpu.vramTotal == 0
                 ? null
@@ -515,6 +529,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 used: s.memUsed,
                 total: s.memTotal,
                 accent: scheme.tertiary,
+                onTap: () => showStatsSheet(context, _history, Metric.mem),
               ),
             ),
             const SizedBox(width: 10),
