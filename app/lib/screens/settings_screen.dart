@@ -1,6 +1,10 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/device.dart';
+import '../services/device_store.dart';
 
 import '../services/settings.dart';
 import '../ui/palettes.dart';
@@ -65,6 +69,7 @@ class SettingsScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
+                const _TilePicker(),
               ],
             );
           },
@@ -134,6 +139,87 @@ class _ThemeTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Qual PC o bloco "Ligar PC" das Configurações rápidas liga. O bloco
+/// (WakeTileService.kt) lê esta escolha e a lista de PCs; sem escolha, usa o
+/// primeiro com MAC.
+class _TilePicker extends StatefulWidget {
+  const _TilePicker();
+
+  static const prefsKey = 'tile_device';
+
+  @override
+  State<_TilePicker> createState() => _TilePickerState();
+}
+
+class _TilePickerState extends State<_TilePicker> {
+  List<Device> _devices = [];
+  String? _chosen;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final devices = (await DeviceStore().load()).where((d) => d.mac.isNotEmpty).toList();
+    final chosen = (await SharedPreferences.getInstance()).getString(_TilePicker.prefsKey);
+    if (!mounted) return;
+    setState(() {
+      _devices = devices;
+      _chosen = devices.any((d) => d.id == chosen) ? chosen : devices.firstOrNull?.id;
+    });
+  }
+
+  Future<void> _choose(Device d) async {
+    setState(() => _chosen = d.id);
+    await (await SharedPreferences.getInstance()).setString(_TilePicker.prefsKey, d.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionLabel('Bloco "Ligar PC"'),
+        if (_devices.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              'Cadastre um PC com MAC para usar o bloco das Configurações rápidas.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          )
+        else
+          ExpressiveGroup(
+            children: [
+              for (final d in _devices)
+                GroupTile(
+                  icon: Symbols.power_settings_new_rounded,
+                  title: d.name,
+                  subtitle: d.mac,
+                  highlighted: d.id == _chosen,
+                  trailing: d.id == _chosen
+                      ? Icon(Symbols.check_circle_rounded, fill: 1, color: scheme.primary)
+                      : const SizedBox(width: 24),
+                  onTap: () => _choose(d),
+                ),
+            ],
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 0),
+          child: Text(
+            'Adicione o bloco puxando as Configurações rápidas e tocando no lápis. Ele só liga o PC; '
+            'desligar e comandos continuam só dentro do app.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
+      ],
     );
   }
 }

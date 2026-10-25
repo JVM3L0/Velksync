@@ -33,6 +33,18 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Bloco "Ligar PC" das Configurações rápidas: só manda o Wake-on-LAN.
+             A permissão garante que só o sistema pode se ligar a ele. -->
+        <service
+            android:name=".WakeTileService"
+            android:exported="true"
+            android:label="Ligar PC"
+            android:icon="@drawable/ic_tile_power"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
