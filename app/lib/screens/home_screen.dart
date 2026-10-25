@@ -10,6 +10,7 @@ import '../services/pc_events.dart';
 import '../services/settings.dart';
 import '../services/wol.dart';
 import '../ui/theme.dart';
+import '../ui/transitions.dart';
 import '../ui/widgets.dart';
 import 'device_form_screen.dart';
 import 'device_screen.dart';
@@ -248,53 +249,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     return Card(
-      child: InkWell(
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => DeviceScreen(device: d, onEdit: () => _edit(d)),
-            ),
-          );
-          _refresh();
-        },
-        onLongPress: () => _edit(d),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              IconBadge(icon: online ? osIcon(info!.os) : Symbols.computer_rounded, highlighted: online, size: 60),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(d.name, style: text.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    StatusPill(status: status, detail: online ? info!.osLabel : null),
-                  ],
+      child: Builder(
+        builder: (card) => InkWell(
+          onTap: () async {
+            await Navigator.push(
+              context,
+              ContainerTransformRoute(
+                origin: card,
+                builder: (_) => DeviceScreen(device: d, onEdit: () => _edit(d)),
+              ),
+            );
+            _refresh();
+          },
+          onLongPress: () => _edit(d),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                IconBadge(icon: online ? osIcon(info!.os) : Symbols.computer_rounded, highlighted: online, size: 60),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(d.name, style: text.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      StatusPill(status: status, detail: online ? info!.osLabel : null),
+                    ],
+                  ),
                 ),
-              ),
-              AnimatedSwitcher(
-                duration: Motion.spatialFastDuration,
-                switchInCurve: Motion.spatialFast,
-                transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
-                child: (status == PcStatus.offline || status == PcStatus.unpaired) && d.mac.isNotEmpty
-                    ? IconButton.filled(
-                        key: const ValueKey('wake'),
-                        tooltip: 'Ligar',
-                        iconSize: 28,
-                        style: IconButton.styleFrom(minimumSize: const Size(56, 56)),
-                        onPressed: () => _wake(d),
-                        icon: const Icon(Symbols.power_settings_new_rounded, weight: 600),
-                      )
-                    : Icon(
-                        Symbols.keyboard_arrow_right_rounded,
-                        key: const ValueKey('open'),
-                        color: scheme.onSurfaceVariant,
-                      ),
-              ),
-            ],
+                AnimatedSwitcher(
+                  duration: Motion.spatialFastDuration,
+                  switchInCurve: Motion.spatialFast,
+                  transitionBuilder: (child, a) => ScaleTransition(scale: a, child: child),
+                  child: (status == PcStatus.offline || status == PcStatus.unpaired) && d.mac.isNotEmpty
+                      ? IconButton.filled(
+                          key: const ValueKey('wake'),
+                          tooltip: 'Ligar',
+                          iconSize: 28,
+                          style: IconButton.styleFrom(minimumSize: const Size(56, 56)),
+                          onPressed: () => _wake(d),
+                          icon: const Icon(Symbols.power_settings_new_rounded, weight: 600),
+                        )
+                      : Icon(
+                          Symbols.keyboard_arrow_right_rounded,
+                          key: const ValueKey('open'),
+                          color: scheme.onSurfaceVariant,
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

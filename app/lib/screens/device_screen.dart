@@ -9,6 +9,7 @@ import '../services/wol.dart';
 import '../ui/media_panel.dart';
 import '../ui/perf.dart';
 import '../ui/theme.dart';
+import '../ui/transitions.dart';
 import '../ui/widgets.dart';
 import 'terminal_screen.dart';
 
@@ -154,49 +155,47 @@ class _DeviceScreenState extends State<DeviceScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: AnimatedSwitcher(
-        duration: Motion.spatialDuration,
-        switchInCurve: Motion.effects,
-        transitionBuilder: (child, a) => FadeTransition(
-          opacity: a,
-          child: ScaleTransition(scale: Tween(begin: 0.97, end: 1.0).animate(a), child: child),
-        ),
-        child: KeyedSubtree(
-          key: ValueKey(online ? _tab : 0),
-          child: switch (online ? _tab : 0) {
-            1 => _performanceTab(),
-            2 => MediaPanel(client: _client),
-            _ => _controlTab(d, status, online, scheme),
-          },
-        ),
+      body: SharedAxisSwitcher(
+        index: online ? _tab : 0,
+        child: switch (online ? _tab : 0) {
+          1 => _performanceTab(),
+          2 => MediaPanel(client: _client),
+          _ => _controlTab(d, status, online, scheme),
+        },
       ),
       // Abas só com o PC respondendo: desempenho e mídia dependem do agente.
-      bottomNavigationBar: online
-          ? NavigationBar(
-              selectedIndex: _tab,
-              onDestinationSelected: (i) {
-                setState(() => _tab = i);
-                if (i == 1) _refreshStats();
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Symbols.power_settings_new_rounded),
-                  selectedIcon: Icon(Symbols.power_settings_new_rounded, fill: 1),
-                  label: 'Controle',
-                ),
-                NavigationDestination(
-                  icon: Icon(Symbols.monitoring_rounded),
-                  selectedIcon: Icon(Symbols.monitoring_rounded, fill: 1),
-                  label: 'Desempenho',
-                ),
-                NavigationDestination(
-                  icon: Icon(Symbols.music_note_rounded),
-                  selectedIcon: Icon(Symbols.music_note_rounded, fill: 1),
-                  label: 'Mídia',
-                ),
-              ],
-            )
-          : null,
+      bottomNavigationBar: AnimatedSize(
+        duration: Motion.spatialDuration,
+        curve: Motion.effects,
+        alignment: Alignment.topCenter,
+        child: online
+            ? NavigationBar(
+                selectedIndex: _tab,
+                onDestinationSelected: (i) {
+                  setState(() => _tab = i);
+                  if (i == 1) _refreshStats();
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Symbols.power_settings_new_rounded),
+                    selectedIcon: Icon(Symbols.power_settings_new_rounded, fill: 1),
+                    label: 'Controle',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Symbols.monitoring_rounded),
+                    selectedIcon: Icon(Symbols.monitoring_rounded, fill: 1),
+                    label: 'Desempenho',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Symbols.music_note_rounded),
+                    selectedIcon: Icon(Symbols.music_note_rounded, fill: 1),
+                    label: 'Mídia',
+                  ),
+                ],
+              )
+            // Sem abas, mantém o respiro da barra de gestos.
+            : SizedBox(width: double.infinity, height: MediaQuery.paddingOf(context).bottom),
+      ),
     );
   }
 
