@@ -34,8 +34,11 @@ jobs:
           want="${TAG#v}"
           agent=$(sed -n 's/^const version = "\(.*\)"$/\1/p' agent/main.go)
           app=$(sed -n 's/^version: \([^+]*\)+.*$/\1/p' app/pubspec.yaml)
-          echo "tag=$want agente=$agent app=$app"
-          [ "$agent" = "$want" ] && [ "$app" = "$want" ] || { echo "::error::Versões diferentes da tag"; exit 1; }
+          # Versão gravada no .exe (Propriedades → Detalhes); muda junto com o
+          # winres.json e o .syso (go-winres, ver agent/winres/winres.json).
+          exe=$(sed -n 's/^ *"ProductVersion": "\(.*\)"$/\1/p' agent/winres/winres.json)
+          echo "tag=$want agente=$agent app=$app exe=$exe"
+          [ "$agent" = "$want" ] && [ "$app" = "$want" ] && [ "$exe" = "$want" ] || { echo "::error::Versões diferentes da tag"; exit 1; }
 
   agent:
     name: Agente (Linux e Windows)
