@@ -1,8 +1,10 @@
-# Execute como administrador:  powershell -ExecutionPolicy Bypass -File install-windows.ps1 [-Token <token do Linux>]
+﻿# Execute como administrador:  powershell -ExecutionPolicy Bypass -File install-windows.ps1 [-Token <token do Linux>]
 # O agente roda na sua sessão ao fazer logon (necessário para comandos que abrem janelas);
 # o sinal de presença roda no boot, antes do login. Rode de novo após trocar o token mestre.
-param([string]$Token = "")
+# O instalador (velksync-setup) chama este script com -TokenFile e -LogFile.
+param([string]$Token = "", [string]$TokenFile = "", [string]$LogFile = "")
 $ErrorActionPreference = "Stop"
+if ($LogFile) { Start-Transcript -Path $LogFile -Force | Out-Null }
 $dir = Join-Path $env:LOCALAPPDATA "Velksync"
 $exe = Join-Path $dir "velksync-agent.exe"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
@@ -13,7 +15,12 @@ Copy-Item (Join-Path $PSScriptRoot "velksync-agent.exe") $exe -Force
 
 $cfg = Join-Path $env:APPDATA "velksync\config.json"
 if (-not (Test-Path $cfg)) {
-    if ($Token) { & $exe init -token $Token | Write-Host } else { & $exe init | Write-Host }
+    # Saída descartada: o init mostra o token, e ele não deve parar em log.
+    if ($TokenFile) { $init = @("init", "-token-file", "`"$TokenFile`"") }
+    elseif ($Token) { $init = @("init", "-token", $Token) }
+    else { $init = @("init") }
+    $p = Start-Process $exe -ArgumentList $init -Wait -PassThru -WindowStyle Hidden
+    if ($p.ExitCode -ne 0) { throw "init falhou ($($p.ExitCode)); o token tem pelo menos 32 caracteres?" }
 }
 
 foreach ($r in @(@{n="Velksync TCP"; p="TCP"; port=41100}, @{n="Velksync UDP"; p="UDP"; port=41101})) {
@@ -58,8 +65,7 @@ Register-ScheduledTask -TaskName "Velksync Agent" -Action $action -Trigger $trig
 Start-ScheduledTask -TaskName "Velksync Agent"
 
 Write-Host "Instalado em $exe"
-# Lido do arquivo: o .exe é GUI e o PowerShell nem sempre captura a saída dele.
-Write-Host "Token mestre (use só para instalar no outro sistema do dual boot; não compartilhe):"
-Write-Host "  $((Get-Content $cfg -Raw | ConvertFrom-Json).token)"
 Write-Host "Para parear um celular: & `"$exe`" pair"
-Write-Host "Lembre: a rede do Windows precisa estar como 'Privada' e o Fast Startup desativado para o Wake-on-LAN."
+Write-Host "Para conferir o Wake-on-LAN: & `"$exe`" doctor"
+Write-Host "Token mestre, só para instalar no outro sistema do dual boot: & `"$exe`" token"
+if ($LogFile) { Stop-Transcript | Out-Null }
