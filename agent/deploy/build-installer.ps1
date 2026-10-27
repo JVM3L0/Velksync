@@ -9,8 +9,14 @@ $ErrorActionPreference = "Stop"
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Versão inválida: $Version (use 0.5.0, sem o v)" }
 
 $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
-if (-not $iscc) { $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe" }
-if (-not (Test-Path $iscc)) { throw "Inno Setup 6 não encontrado (https://jrsoftware.org/isdl.php)" }
+if (-not $iscc) {
+    # Instalado para todos ou só para o usuário (o winget faz assim).
+    $iscc = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $iscc) { throw "Inno Setup 6 não encontrado (https://jrsoftware.org/isdl.php)" }
 
 $exe = (Resolve-Path $AgentExe).Path
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
