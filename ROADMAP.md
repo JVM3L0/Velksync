@@ -100,15 +100,15 @@ uso, testes e esboço antes de implementar.
 | 2 | Mandar do celular para o PC (menu Compartilhar: link abre no PC, texto vai para a área de transferência) | médio | hoje só existe PC → celular |
 | 3 | Controles de mídia na notificação e na tela de bloqueio | grande | ver item 4 acima |
 | 4 | Ligar o PC num horário (diário ou uma vez) | pequeno/médio | Wake-on-LAN agendado no celular |
-| 5 | Atalhos no ícone do app (Ligar/Desligar) | pequeno | |
+| 5 | Atalhos no ícone do app (Ligar/Desligar) | pequeno | assistentes costumam conseguir abrir; ponte até o 12 |
 | 6 | Exportar/importar os PCs em backup criptografado | médio | evita parear de novo ao trocar de celular |
 | 7 | Touchpad e teclado remotos | grande | |
 | 8 | Instalar e testar o agente no Linux do dual boot | pequeno | com o dono do projeto |
 | 9 | Acesso fora de casa com Tailscale | médio | mais configuração e docs que código |
 | 10 | Avisos do PC com o app fechado | grande | custo de bateria ou privacidade |
 | 11 | Primeira vez guiada: o que é o agente, QR e teste de ligar ("Funcionou?") | médio | hoje quem instala cai numa tela vazia |
+| 12 | Ligar e desligar pelo Gemini ("liga o Velkhyro"), via AppFunctions | pequeno | depende do Google liberar a integração (em teste fechado em maio/2026); ligar sem confirmação, desligar pede confirmação no app |
 
-Também: assistente opcional (Gemini).
 
 ## Feito fora do plano
 
