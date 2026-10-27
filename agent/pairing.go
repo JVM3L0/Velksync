@@ -76,6 +76,16 @@ func (s *Server) pairStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"claimed": claimed, "expired": expired, "by": by})
 }
 
+// POST /api/pair/window (com token): o comando pair, aberto sem terminal
+// (pelo instalador), pede a janela do QR ao agente em vez de abrir uma imagem.
+func (s *Server) pairWindow(w http.ResponseWriter, r *http.Request) {
+	if err := s.ui.ShowPair(); err != nil {
+		writeErr(w, http.StatusNotImplemented, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // POST /api/pair/claim (sem credencial): o app troca o código do QR por uma
 // credencial própria do celular, que pode ser revogada depois.
 func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +106,7 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 	id := newDeviceID()
 	s.addDevice(id, name)
 	log.Printf("pareado: %s (%s) de %s", name, id, r.RemoteAddr)
+	s.notice("Novo celular pareado", name)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"device_id": id,
 		"token":     deviceToken(s.cfg.Token, id),

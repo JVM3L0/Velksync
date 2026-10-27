@@ -65,6 +65,18 @@ func newLive(stats func() any, media func() MediaState) *Live {
 	}
 }
 
+// Clients conta os celulares com o canal ao vivo aberto (um celular pode ter
+// mais de um canal).
+func (l *Live) Clients() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	seen := map[string]bool{}
+	for sub := range l.subs {
+		seen[sub.client] = true
+	}
+	return len(seen)
+}
+
 // Kick avisa que a mídia deve mudar já (próxima, anterior, play, seek): o
 // laço lê o player algumas vezes seguidas até ver a mudança. Sem ninguém
 // inscrito não faz nada; vários seguidos viram uma rajada só.

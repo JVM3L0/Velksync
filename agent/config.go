@@ -40,6 +40,13 @@ type Config struct {
 	// Mídia pausada há mais que isso some do app (aba de navegador congelada
 	// não toca mesmo aceitando o play). Ausente: 10; 0: nunca esconde.
 	MediaIdleMinutes *int `json:"media_idle_minutes,omitempty"`
+	// Contagem antes de desligar/reiniciar/suspender quando a sessão está
+	// desbloqueada (Windows), para quem está no PC poder cancelar.
+	// Ausente: 10; 0: executa na hora.
+	PowerGraceSeconds *int `json:"power_grace_seconds,omitempty"`
+	// Avisos do Windows quando um celular pareia, roda um comando ou agenda
+	// o desligamento. Ausente: ligado. Muda pelo menu do ícone.
+	TrayNotices *bool `json:"tray_notices,omitempty"`
 	// Celulares pareados neste sistema (só para listar) e ids revogados.
 	// No dual boot, revogue nos dois sistemas.
 	Devices []PairedDevice `json:"devices,omitempty"`
@@ -112,6 +119,17 @@ func (c Config) mediaIdle() time.Duration {
 	}
 	return time.Duration(max(0, *c.MediaIdleMinutes)) * time.Minute
 }
+
+const defaultPowerGrace = 10 * time.Second
+
+func (c Config) powerGrace() time.Duration {
+	if c.PowerGraceSeconds == nil {
+		return defaultPowerGrace
+	}
+	return time.Duration(min(max(0, *c.PowerGraceSeconds), 120)) * time.Second
+}
+
+func (c Config) trayNotices() bool { return c.TrayNotices == nil || *c.TrayNotices }
 
 func saveConfig(path string, cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

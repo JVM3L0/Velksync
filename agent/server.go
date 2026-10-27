@@ -27,7 +27,9 @@ type Server struct {
 	limiter    *Limiter
 	live       *Live
 	schedule   *Scheduler
-	mu         sync.Mutex // protege cfg.Devices e cfg.Revoked
+	ui         desktop
+	notices    *noticeBatcher
+	mu         sync.Mutex // protege cfg.Devices, cfg.Revoked e cfg.TrayNotices
 }
 
 func (s *Server) routes() http.Handler {
@@ -40,14 +42,25 @@ func (s *Server) routes() http.Handler {
 	if s.live == nil {
 		s.live = newLive(currentStats, currentMedia)
 	}
+	if s.ui == nil {
+		s.ui = noDesktop{}
+	}
+	if s.notices == nil {
+		s.notices = newNoticeBatcher(func(title, text string) { s.ui.Notify(title, text) })
+	}
 	if s.schedule == nil {
-		s.schedule = newScheduler(runPower, func(text string) {
+		s.schedule = newScheduler(func(action string) {
+			if s.confirmPower(action, "O agendamento") {
+				runPower(action)
+			}
+		}, func(text string) {
 			s.hub.Publish(Event{Type: "notify", Text: text})
 		}, currentMedia)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/pair/start", masterOnly(s.pairStart))
 	mux.HandleFunc("GET /api/pair/status", masterOnly(s.pairStatus))
+	mux.HandleFunc("POST /api/pair/window", masterOnly(s.pairWindow))
 	mux.HandleFunc("GET /api/devices", masterOnly(s.listDevices))
 	mux.HandleFunc("POST /api/devices/revoke", masterOnly(s.revokeDevice))
 	mux.HandleFunc("GET /api/info", s.info)
@@ -159,15 +172,70 @@ func (s *Server) power(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	log.Printf("energia: %s (pedido de %s)", req.Action, r.RemoteAddr)
-	writeJSON(w, http.StatusAccepted, map[string]string{"status": "ok"})
-	// Dá tempo da resposta chegar no celular antes da máquina cair.
+	by := s.deviceName(clientOf(r))
+	// Com alguém no PC (sessão desbloqueada), dá tempo de cancelar; o app
+	// mostra "desliga em N s" a partir de grace_s.
+	var grace time.Duration
+	if s.ui.Present() {
+		grace = s.cfg.powerGrace()
+	}
+	log.Printf("energia: %s (pedido de %s, %s, contagem %s)", req.Action, by, r.RemoteAddr, grace)
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": "ok", "grace_s": int(grace.Seconds())})
 	go func() {
-		time.Sleep(500 * time.Millisecond)
+		if grace > 0 {
+			if !s.ui.AskPower(req.Action, by, grace) {
+				s.powerCancelled(req.Action)
+				return
+			}
+		} else {
+			// Dá tempo da resposta chegar no celular antes da máquina cair.
+			time.Sleep(500 * time.Millisecond)
+		}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("falha em %s: %v %s", req.Action, err, out)
 		}
 	}()
+}
+
+// confirmPower é a contagem para quem já esperou (agendamentos): na hora se
+// ninguém está no PC, senão espera a contagem.
+func (s *Server) confirmPower(action, by string) bool {
+	grace := s.cfg.powerGrace()
+	if grace == 0 || !s.ui.Present() || s.ui.AskPower(action, by, grace) {
+		return true
+	}
+	s.powerCancelled(action)
+	return false
+}
+
+func (s *Server) powerCancelled(action string) {
+	log.Printf("energia: %s cancelado no PC", action)
+	s.hub.Publish(Event{Type: "notify", Text: fmt.Sprintf("Cancelado no PC: ele não vai %s.", powerVerb(action))})
+}
+
+// notice mostra um aviso no PC, se estiverem ligados no menu do ícone.
+func (s *Server) notice(title, text string) {
+	s.mu.Lock()
+	on := s.cfg.trayNotices()
+	s.mu.Unlock()
+	if on {
+		s.notices.Add(title, text)
+	}
+}
+
+// deviceName traduz o id da credencial no nome dado ao parear.
+func (s *Server) deviceName(client string) string {
+	if client == "master" {
+		return "Este PC"
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.cfg.Devices {
+		if d.ID == client {
+			return d.Name
+		}
+	}
+	return "Um celular"
 }
 
 func (s *Server) listCommands(w http.ResponseWriter, r *http.Request) {
@@ -189,6 +257,7 @@ func (s *Server) runCommand(w http.ResponseWriter, r *http.Request) {
 	for _, c := range s.cfg.Commands {
 		if c.ID == id && c.ForCurrentOS() != "" {
 			log.Printf("comando %q (pedido de %s)", id, r.RemoteAddr)
+			s.notice(s.deviceName(clientOf(r)), fmt.Sprintf("rodou \"%s\"", clip(c.Name, 60)))
 			writeJSON(w, http.StatusOK, s.execute(r.Context(), c.ForCurrentOS()))
 			return
 		}
@@ -209,6 +278,7 @@ func (s *Server) shell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("shell %q (pedido de %s)", req.Command, r.RemoteAddr)
+	s.notice(s.deviceName(clientOf(r)), "rodou no terminal: "+clip(req.Command, 80))
 	writeJSON(w, http.StatusOK, s.execute(r.Context(), req.Command))
 }
 

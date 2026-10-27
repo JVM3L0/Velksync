@@ -66,6 +66,13 @@ func attachConsole() {
 	}
 }
 
+// allowForeground deixa o agente trazer a janela do QR para a frente: sem
+// isso o Windows só pisca o ícone na barra de tarefas.
+func allowForeground() {
+	const asfwAny = ^uintptr(0)
+	syscall.NewLazyDLL("user32.dll").NewProc("AllowSetForegroundWindow").Call(asfwAny)
+}
+
 // notifyUser mostra uma mensagem quando não há console para ler a saída.
 func notifyUser(text string, isError bool) {
 	if hasConsole {

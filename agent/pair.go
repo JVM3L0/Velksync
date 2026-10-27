@@ -46,6 +46,23 @@ func broadcastFor(ip net.IP) string {
 	return "255.255.255.255"
 }
 
+// pairLink é o conteúdo do QR: tudo o que o app precisa para adicionar o PC.
+func pairLink(cfg Config, ip net.IP, code string) (string, error) {
+	pin, err := pinFor(cfg.Token)
+	if err != nil {
+		return "", err
+	}
+	q := url.Values{}
+	q.Set("name", cfg.Name)
+	q.Set("host", ip.String())
+	q.Set("port", fmt.Sprint(cfg.Port))
+	q.Set("code", code)
+	q.Set("fp", pin)
+	q.Set("mac", macFor(ip, false))
+	q.Set("broadcast", broadcastFor(ip))
+	return "velksync://pair?" + q.Encode(), nil
+}
+
 // pairCmd shows a QR code with everything the app needs to add this PC.
 func pairCmd(configPath string, args []string) error {
 	fl := flag.NewFlagSet("pair", flag.ExitOnError)
@@ -70,32 +87,33 @@ func pairCmd(configPath string, args []string) error {
 		ExpiresIn int    `json:"expires_in"`
 	}
 	// Logo depois de instalar, o agente pode ainda estar subindo.
-	for wait := 0; ; wait++ {
-		err = localAPI(cfg, "POST", "/api/pair/start", nil, &start)
-		var ue *url.Error
-		if err == nil || !errors.As(err, &ue) || wait == 15 {
-			break
+	call := func(path string, out any) error {
+		for wait := 0; ; wait++ {
+			err := localAPI(cfg, "POST", path, nil, out)
+			var ue *url.Error
+			if err == nil || !errors.As(err, &ue) || wait == 15 {
+				return err
+			}
+			time.Sleep(time.Second)
 		}
-		time.Sleep(time.Second)
 	}
-	if err != nil {
+	// Aberto sem terminal (pelo instalador): a janela do QR é do agente, que
+	// fecha sozinha ao parear. Agente antigo ou sem janela: segue com a imagem.
+	if !hasConsole {
+		var ok struct{}
+		allowForeground()
+		if call("/api/pair/window", &ok) == nil {
+			return nil
+		}
+	}
+	if err := call("/api/pair/start", &start); err != nil {
 		return err
 	}
 
-	pin, err := pinFor(cfg.Token)
+	link, err := pairLink(cfg, ip, start.Code)
 	if err != nil {
 		return err
 	}
-
-	q := url.Values{}
-	q.Set("name", cfg.Name)
-	q.Set("host", ip.String())
-	q.Set("port", fmt.Sprint(cfg.Port))
-	q.Set("code", start.Code)
-	q.Set("fp", pin)
-	q.Set("mac", macFor(ip, false))
-	q.Set("broadcast", broadcastFor(ip))
-	link := "velksync://pair?" + q.Encode()
 
 	qr, err := qrcode.New(link, qrcode.Medium)
 	if err != nil {

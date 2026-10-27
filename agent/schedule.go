@@ -233,6 +233,7 @@ func (s *Server) schedulePower(w http.ResponseWriter, r *http.Request, action st
 		return
 	}
 	log.Printf("energia agendada: %+v (pedido de %s)", *p, r.RemoteAddr)
+	s.notice(s.deviceName(clientOf(r)), "agendou "+scheduleText(p))
 	writeJSON(w, http.StatusAccepted, p)
 }
 

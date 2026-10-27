@@ -24,6 +24,11 @@ func shellCommand(ctx context.Context, line string) *exec.Cmd {
 
 func attachConsole() {}
 
+// No Linux os comandos sempre rodam num terminal.
+const hasConsole = true
+
+func allowForeground() {}
+
 // No Linux os comandos rodam no terminal: a saída já basta.
 func notifyUser(string, bool) {}
 
