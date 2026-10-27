@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -118,8 +119,12 @@ class AgentClient {
   Future<void> mediaVolume({double? volume, bool? muted}) =>
       _send('POST', '/api/media/volume', body: {'volume': ?volume?.clamp(0.0, 1.0), 'muted': ?muted});
 
-  /// action: shutdown, reboot ou sleep.
-  Future<void> power(String action) => _send('POST', '/api/power', body: {'action': action});
+  /// action: shutdown, reboot ou sleep. Devolve a contagem em segundos que o
+  /// PC mostra antes de executar (0: na hora; agentes antigos não mandam).
+  Future<int> power(String action) async => graceOf(await _send('POST', '/api/power', body: {'action': action}));
+
+  static int graceOf(Object? response) =>
+      response is Map && response['grace_s'] is num ? max(0, (response['grace_s'] as num).toInt()) : 0;
 
   /// Agenda shutdown ou sleep: daqui a [delay] ou quando a mídia parar.
   Future<void> schedulePower(String action, {Duration? delay, bool whenMediaStops = false}) => _send(

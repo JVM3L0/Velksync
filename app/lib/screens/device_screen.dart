@@ -179,8 +179,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
     );
     if (ok != true) return;
     try {
-      await _client.power(action);
-      _snack('$label: comando enviado');
+      final grace = await _client.power(action);
+      _snack(grace > 0 ? '$label em $grace s, se ninguém cancelar no PC' : '$label: comando enviado');
     } on AgentException catch (e) {
       _snack(e.message);
     }
