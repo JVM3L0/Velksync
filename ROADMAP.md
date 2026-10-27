@@ -100,7 +100,7 @@ uso, testes e esboço antes de implementar.
 | 2 | Mandar do celular para o PC (menu Compartilhar: link abre no PC, texto vai para a área de transferência) | médio | hoje só existe PC → celular |
 | 3 | Controles de mídia na notificação e na tela de bloqueio | grande | ver item 4 acima |
 | 4 | Ligar o PC num horário (diário ou uma vez) | pequeno/médio | Wake-on-LAN agendado no celular |
-| 5 | Atalhos no ícone do app (Ligar/Desligar) | pequeno | assistentes costumam conseguir abrir; ponte até o 12 |
+| 5 | Atalhos no ícone do app, condicionais: "Ligar" com o PC desligado, "Desligar"/"Reiniciar" ligado (último estado visto pelo app, como o widget) | pequeno | um por PC (até ~4); desatualizado só mostra a opção errada: ligar é inofensivo e desligar confere o estado real e confirma; assistentes costumam abrir atalhos, ponte até o 12 |
 | 6 | Exportar/importar os PCs em backup criptografado | médio | evita parear de novo ao trocar de celular |
 | 7 | Touchpad e teclado remotos | grande | |
 | 8 | Instalar e testar o agente no Linux do dual boot | pequeno | com o dono do projeto |
