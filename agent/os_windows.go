@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"unicode/utf8"
+	"unsafe"
 
 	"golang.org/x/text/encoding/charmap"
 )
@@ -44,11 +45,16 @@ func shellCommand(ctx context.Context, line string) *exec.Cmd {
 	return hidden(cmd)
 }
 
+// hasConsole diz se alguém lê a saída. Aberto pelo instalador ou com dois
+// cliques, ninguém lê: o resultado vai numa caixa de mensagem.
+var hasConsole bool
+
 // O binário do Windows é compilado como GUI (sem janela de console). Quando
 // chamado de um terminal (token, send...), pega o console do processo pai.
 func attachConsole() {
 	if h, _ := syscall.GetStdHandle(syscall.STD_OUTPUT_HANDLE); h != 0 && h != syscall.InvalidHandle {
-		return // saída já redirecionada (pipe ou arquivo)
+		hasConsole = true // saída já redirecionada (pipe ou arquivo)
+		return
 	}
 	attach := syscall.NewLazyDLL("kernel32.dll").NewProc("AttachConsole")
 	if r, _, _ := attach.Call(uintptr(^uint32(0))); r == 0 {
@@ -56,7 +62,23 @@ func attachConsole() {
 	}
 	if f, err := os.OpenFile("CONOUT$", os.O_RDWR, 0); err == nil {
 		os.Stdout, os.Stderr = f, f
+		hasConsole = true
 	}
+}
+
+// notifyUser mostra uma mensagem quando não há console para ler a saída.
+func notifyUser(text string, isError bool) {
+	if hasConsole {
+		return
+	}
+	const mbIconInformation, mbIconError, mbSetForeground = 0x40, 0x10, 0x10000
+	flags := uintptr(mbIconInformation | mbSetForeground)
+	if isError {
+		flags = mbIconError | mbSetForeground
+	}
+	t, _ := syscall.UTF16PtrFromString(text)
+	c, _ := syscall.UTF16PtrFromString("Velksync")
+	syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), flags)
 }
 
 func defaultLogPath(configPath string) string {

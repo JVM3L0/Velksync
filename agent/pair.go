@@ -69,7 +69,16 @@ func pairCmd(configPath string, args []string) error {
 		Code      string `json:"code"`
 		ExpiresIn int    `json:"expires_in"`
 	}
-	if err := localAPI(cfg, "POST", "/api/pair/start", nil, &start); err != nil {
+	// Logo depois de instalar, o agente pode ainda estar subindo.
+	for wait := 0; ; wait++ {
+		err = localAPI(cfg, "POST", "/api/pair/start", nil, &start)
+		var ue *url.Error
+		if err == nil || !errors.As(err, &ue) || wait == 15 {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
 		return err
 	}
 
@@ -126,6 +135,7 @@ func pairCmd(configPath string, args []string) error {
 		switch {
 		case st.Claimed:
 			fmt.Printf("Pareado com %s. QR apagado.\n", st.By)
+			notifyUser(fmt.Sprintf("Pareado com %s.\n\nPode fechar a imagem do QR: ele já foi apagado.", st.By), false)
 			return nil
 		case st.Expired:
 			return errors.New("código expirou sem ser lido; rode pair de novo")

@@ -22,7 +22,7 @@ const usage = `velksync-agent %s
 
 Uso:
   velksync-agent [-config arquivo]                 inicia o agente
-  velksync-agent init [-token T] [-force]          cria a config (use o mesmo token nos dois sistemas do dual boot)
+  velksync-agent init [-token T|-token-file F] [-force] cria a config (use o mesmo token nos dois sistemas do dual boot)
   velksync-agent token                             mostra o token mestre (não compartilhe; celulares usam o QR)
   velksync-agent pair [-host IP]                   mostra um QR para parear um celular
   velksync-agent devices                           lista os celulares pareados e revogados
@@ -91,6 +91,9 @@ func main() {
 			log.Printf("erro: %v", err) // no Windows o stderr não aparece; isso vai para o agent.log
 		}
 		fmt.Fprintln(os.Stderr, "erro:", err)
+		if cmd != "" {
+			notifyUser("Erro: "+err.Error(), true)
+		}
 		os.Exit(1)
 	}
 }
@@ -98,8 +101,16 @@ func main() {
 func initCmd(path string, args []string) error {
 	fl := flag.NewFlagSet("init", flag.ExitOnError)
 	token := fl.String("token", "", "token a usar (padrão: gera um novo)")
+	tokenFile := fl.String("token-file", "", "lê o token de um arquivo (não fica na linha de comando)")
 	force := fl.Bool("force", false, "sobrescreve a config existente")
 	fl.Parse(args)
+	if *tokenFile != "" {
+		data, err := os.ReadFile(*tokenFile)
+		if err != nil {
+			return err
+		}
+		*token = strings.TrimSpace(strings.TrimPrefix(string(data), "\uFEFF"))
+	}
 
 	if _, err := os.Stat(path); err == nil && !*force {
 		return fmt.Errorf("%s já existe (use -force para sobrescrever)", path)

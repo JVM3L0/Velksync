@@ -24,6 +24,9 @@ func shellCommand(ctx context.Context, line string) *exec.Cmd {
 
 func attachConsole() {}
 
+// No Linux os comandos rodam no terminal: a saída já basta.
+func notifyUser(string, bool) {}
+
 func defaultLogPath(string) string { return "" }
 
 // No Linux o QR já aparece no terminal.
