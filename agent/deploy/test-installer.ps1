@@ -42,12 +42,15 @@ Check ((Count-Tasks) -eq 2 -and (Count-Rules) -eq 3) "atualização não duplica
 
 $uninstaller = (Get-ItemProperty $uninstallKey).UninstallString.Trim('"')
 Start-Process $uninstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
-# O desinstalador se copia para a pasta temporária e roda de lá.
-for ($i = 0; $i -lt 60 -and (Test-Path $uninstallKey); $i++) { Start-Sleep 1 }
+# O desinstalador se copia para a pasta temporária e roda de lá; ele sai de
+# Aplicativos antes de apagar o próprio unins000.exe.
+$appDir = Join-Path $env:ProgramFiles "Velksync"
+for ($i = 0; $i -lt 60 -and ((Test-Path $uninstallKey) -or (Test-Path $appDir)); $i++) { Start-Sleep 1 }
+if (Test-Path $appDir) { Get-ChildItem $appDir -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize | Out-Host }
 Check (-not (Test-Path $uninstallKey)) "saiu de Aplicativos"
 Check ((Count-Tasks) -eq 0) "nenhuma tarefa"
 Check ((Count-Rules) -eq 0) "nenhuma regra de firewall"
-Check (-not (Test-Path (Join-Path $env:ProgramFiles "Velksync"))) "Arquivos de Programas limpo"
+Check (-not (Test-Path $appDir)) "Arquivos de Programas limpo"
 Check (-not (Test-Path (Join-Path $env:ProgramData "Velksync"))) "segredo de presença apagado"
 Check (-not (Test-Path (Join-Path $env:LOCALAPPDATA "Velksync"))) "pasta do agente apagada"
 Check (-not (Get-Process velksync-agent -ErrorAction SilentlyContinue)) "nenhum agente rodando"
