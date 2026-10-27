@@ -111,20 +111,17 @@ class UpdateSheet extends StatelessWidget {
       ('Rode o instalador (pede sudo para o sinal de presença):', 'cd velksync && ./install-linux.sh'),
     ],
     _ => [
-      ('Na página de versões, baixe o velksync-agent-…-windows-amd64.zip e o SHA256SUMS.', null),
+      ('Na página de versões, baixe o velksync-setup-…-windows-amd64.exe e o SHA256SUMS.', null),
       (
         'No PowerShell, confira se os dois códigos batem:',
-        r'(Get-FileHash .\velksync-agent-*-windows-amd64.zip).Hash.ToLower()'
+        r'(Get-FileHash .\velksync-setup-*.exe).Hash.ToLower()'
             '\n'
-            r'Select-String "windows-amd64.zip" .\SHA256SUMS',
+            r'Select-String "velksync-setup" .\SHA256SUMS',
       ),
       (
-        'Extraia e, no PowerShell como administrador, rode o instalador. A configuração e os celulares pareados continuam.',
-        r'Expand-Archive .\velksync-agent-*-windows-amd64.zip .\velksync -Force'
-            '\n'
-            r'cd .\velksync; Unblock-File .\*'
-            '\n'
-            r'powershell -ExecutionPolicy Bypass -File .\install-windows.ps1',
+        'Abra o instalador e siga as telas. A configuração e os celulares pareados continuam. '
+            'Se o Windows avisar que o app não é reconhecido: Mais informações → Executar assim mesmo.',
+        null,
       ),
     ],
   };

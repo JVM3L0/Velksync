@@ -83,10 +83,11 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('Windows mostra o instalador do PowerShell', (tester) async {
+    testWidgets('Windows mostra o instalador .exe', (tester) async {
       await open(tester, VersionGap.agentOld, 'windows');
       expect(find.text('Atualizar o agente no Windows'), findsOneWidget);
-      expect(find.textContaining('install-windows.ps1'), findsOneWidget);
+      expect(find.textContaining('velksync-setup-…-windows-amd64.exe'), findsOneWidget);
+      expect(find.textContaining('install-windows.ps1'), findsNothing);
     });
 
     testWidgets('Linux mostra o install-linux.sh', (tester) async {
