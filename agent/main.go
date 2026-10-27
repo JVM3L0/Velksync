@@ -27,6 +27,7 @@ Uso:
   velksync-agent pair [-host IP]                   mostra um QR para parear um celular
   velksync-agent devices                           lista os celulares pareados e revogados
   velksync-agent revoke <id ou nome>               revoga um celular (no dual boot, revogue nos dois sistemas)
+  velksync-agent doctor [-fix itens]              confere o Wake-on-LAN do Windows; -fix magic,wake,faststartup,private corrige
   velksync-agent fingerprint                       mostra o pin do certificado TLS deste PC
   velksync-agent send <tipo> [texto]               envia ao celular: notify, open_url, clipboard, vibrate
   velksync-agent presence-export -out <arquivo>    gera o arquivo do sinal de presença (usado pelo instalador)
@@ -73,6 +74,8 @@ func main() {
 				fmt.Printf("%s\n(no app: %s)\n", pin, shortPin(pin))
 			}
 		}
+	case "doctor":
+		err = doctorCmd(args)
 	case "send":
 		err = sendCmd(*configPath, args)
 	case "presence-export":
