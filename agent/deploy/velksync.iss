@@ -60,6 +60,11 @@ Source: "install-windows.ps1"; Flags: dontcopy
 Source: "uninstall-windows.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "installer\velksync.ico"; DestDir: "{app}"; Flags: ignoreversion
 
+[UninstallDelete]
+; O install-windows.ps1 cria a pasta antes do Inno copiar os arquivos, então
+; o Inno não a considera dele e não a apagaria.
+Type: dirifempty; Name: "{app}"
+
 [Run]
 Filename: "{localappdata}\Velksync\velksync-agent.exe"; Parameters: "pair"; \
   Description: "Parear um celular agora (mostra o QR para o app)"; \
