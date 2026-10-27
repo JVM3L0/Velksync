@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -170,4 +171,58 @@ func (s *Server) mediaVolume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// Nomes conhecidos pelo AppUserModelId que o Windows informa (ou um pedaço
+// dele, sem diferenciar maiúsculas). O primeiro que bater vale.
+var knownPlayers = []struct{ match, name string }{
+	{"_crx_cinhimbnkkghhklpknlkffjgod", "YouTube Music"}, // instalado pelo Chrome, Edge, Helium...
+	{"th-ch.youtube-music", "YouTube Music"},             // Pear Desktop
+	{"spotify", "Spotify"},
+	{"applemusic", "Apple Music"},
+	{"deezer", "Deezer"},
+	{"tidal", "TIDAL"},
+	{"microsoft.zunemusic", "Media Player"},
+	{"microsoft.zunevideo", "Filmes e TV"},
+	{"vlc", "VLC"},
+	{"308046b0af4a39cb", "Firefox"}, // id do Firefox instalado
+	{"firefox", "Firefox"},
+	{"msedge", "Edge"},
+	{"brave", "Brave"},
+	{"opera", "Opera"},
+	{"chrome", "Chrome"},
+}
+
+// friendlyApp transforma o AppUserModelId do Windows num nome para o app.
+func friendlyApp(id string) string {
+	low := strings.ToLower(id)
+	for _, k := range knownPlayers {
+		if strings.Contains(low, k.match) {
+			return k.name
+		}
+	}
+	// App instalado pelo navegador (PWA): "Helium._crx_<id>".
+	if i := strings.Index(id, "._crx_"); i > 0 {
+		return friendlyApp(id[:i]) + " (app)"
+	}
+	id = strings.TrimSuffix(id, ".exe")
+	if i := strings.LastIndexAny(id, `\/`); i >= 0 { // caminho do executável
+		id = id[i+1:]
+	}
+	if i := strings.LastIndex(id, "!"); i >= 0 { // app da loja: Pacote_hash!App
+		// O id do app costuma ser o nome; "App" genérico não diz nada, aí vale o pacote.
+		if app := id[i+1:]; app != "" && !strings.EqualFold(app, "App") {
+			id = app
+		} else {
+			id = id[:i]
+		}
+	}
+	if i := strings.Index(id, "_"); i > 0 && strings.Contains(id[:i], ".") {
+		id = id[strings.LastIndex(id[:i], ".")+1 : i]
+	}
+	// Domínio invertido (com.empresa.app): fica o último pedaço.
+	if strings.Count(id, ".") >= 2 && !strings.Contains(id, " ") {
+		id = id[strings.LastIndex(id, ".")+1:]
+	}
+	return id
 }

@@ -149,17 +149,6 @@ func (b *smtcBackend) State() (MediaState, error) {
 }
 
 // "Spotify.exe" → "Spotify"; "308046B0AF4A39CB" (Firefox) fica como está.
-func friendlyApp(id string) string {
-	id = strings.TrimSuffix(id, ".exe")
-	if i := strings.LastIndex(id, "!"); i >= 0 { // AppUserModelId de app da loja
-		id = id[i+1:]
-	}
-	if i := strings.Index(id, "_"); i > 0 && strings.Contains(id[:i], ".") {
-		id = id[strings.LastIndex(id[:i], ".")+1 : i]
-	}
-	return id
-}
-
 func (b *smtcBackend) Art() ([]byte, string, error) {
 	st, err := b.State()
 	if err != nil {
