@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+- Capa em alta (1200 px) com o Pear Desktop: o agente usa a API do plugin
+  API Server, com o acesso permitido no próprio Pear na primeira vez.
+
+### Corrigido
+- Nome dos players no Windows: o YouTube Music instalado pelo navegador
+  aparecia sem nome e o Pear Desktop como `com.github.th-ch.youtube-music`.
+
 ## [0.5.0] - 2026-10-27
 
 ### Adicionado

@@ -47,6 +47,10 @@ type Config struct {
 	// Avisos do Windows quando um celular pareia, roda um comando ou agenda
 	// o desligamento. Ausente: ligado. Muda pelo menu do ícone.
 	TrayNotices *bool `json:"tray_notices,omitempty"`
+	// Acesso à API do Pear Desktop (capas em alta), pedido na primeira vez
+	// que ele toca. pear_denied: negado no Pear; apague para pedir de novo.
+	PearToken  string `json:"pear_token,omitempty"`
+	PearDenied bool   `json:"pear_denied,omitempty"`
 	// Celulares pareados neste sistema (só para listar) e ids revogados.
 	// No dual boot, revogue nos dois sistemas.
 	Devices []PairedDevice `json:"devices,omitempty"`

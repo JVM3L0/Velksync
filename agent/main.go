@@ -175,6 +175,12 @@ func run(configPath, logPath string) error {
 	srv := &Server{cfg: cfg, configPath: configPath, hub: NewHub()}
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("velksync-agent %s ouvindo em https://%s (terminal livre: %v, pin %s)", version, addr, cfg.AllowShell, shortPin(pin))
+	pear = newPearClient(cfg.PearToken, cfg.PearDenied, func(token string, denied bool) {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		srv.cfg.PearToken, srv.cfg.PearDenied = token, denied
+		srv.persist()
+	})
 	handler := srv.routes()
 	srv.ui = startDesktop(srv)
 	hs := newHTTPServer(addr, handler, cert)

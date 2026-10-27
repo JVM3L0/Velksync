@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -142,6 +143,14 @@ func (b *smtcBackend) call(req map[string]any, out any) error {
 func (b *smtcBackend) State() (MediaState, error) {
 	var st MediaState
 	err := b.call(map[string]any{"cmd": "state"}, &st)
+	if isPear(st.Player) && pear != nil {
+		pear.MaybeAuthorize()
+		// Outro art_id quando a capa grande fica disponível: o app guarda as
+		// capas por art_id e assim busca de novo.
+		if pear.Ready() && st.ArtID != "" {
+			st.ArtID += "-hd"
+		}
+	}
 	if st.Player != "" {
 		st.Player = friendlyApp(st.Player)
 	}
@@ -162,6 +171,16 @@ func (b *smtcBackend) Art() ([]byte, string, error) {
 	b.mu.Unlock()
 	if cached.id == st.ArtID {
 		return cached.data, cached.ctype, nil
+	}
+	if strings.HasSuffix(st.ArtID, "-hd") && pear != nil {
+		data, ctype, err := pear.Art(st.Title)
+		if err == nil {
+			b.mu.Lock()
+			b.lastArt.id, b.lastArt.data, b.lastArt.ctype = st.ArtID, data, ctype
+			b.mu.Unlock()
+			return data, ctype, nil
+		}
+		log.Printf("capa do Pear indisponível, usando a do Windows: %v", err)
 	}
 	var res struct {
 		Data string `json:"data"`

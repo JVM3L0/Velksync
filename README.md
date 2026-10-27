@@ -137,6 +137,8 @@ A aba **Mídia** mostra o que está tocando no PC (capa, título, artista, posi�
 - **Windows**: controles de mídia do sistema (o painel de mídia do Windows) e Core Audio para o volume. Um auxiliar do PowerShell embutido no agente é iniciado sob demanda, oculto, e se encerra após 2 minutos sem uso.
 - **Linux**: MPRIS via D-Bus; volume pelo `wpctl` (PipeWire) ou `pactl` (PulseAudio).
 
+**Capas pequenas no Windows.** Navegadores e apps feitos sobre o Chromium (Chrome, Edge, o YouTube Music instalado pelo navegador, o Pear Desktop) entregam ao Windows a capa já reduzida para ~120 px, um valor fixo no código do Chromium. Com o **Pear Desktop** dá para contornar: ligue o plugin *API Server* com o hostname **`127.0.0.1`** (o padrão `0.0.0.0` abre a API para toda a rede). Na primeira vez que o Pear tocar, ele pergunta se o Velksync pode acessar; permitindo, a capa vem em 1200 px dos servidores de imagem do Google. Negando, o Velksync não pergunta de novo (apague `pear_denied` da config para perguntar).
+
 A capa só é entregue se o arquivo for de fato uma imagem, e só vem de `file://` ou `https://`: um player ou página maliciosa não consegue usar o endereço da capa para vazar arquivos do PC nem acessar a rede interna.
 
 ## 7. Agendar
