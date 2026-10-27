@@ -92,6 +92,8 @@ Reinicie o agente depois de editar a config.
 ```
 
 - `commands`: aparecem como botões no app. Um comando sem variante para o SO atual fica escondido.
+- `power_grace_seconds` (padrão 10, só Windows): com a sessão desbloqueada, desligar, reiniciar ou suspender pelo celular mostra uma contagem no PC, e quem está nele pode cancelar. Com a tela bloqueada, executa na hora. `0` desliga a contagem.
+- `tray_notices` (padrão `true`, só Windows): avisos quando um celular pareia, roda um comando ou agenda o desligamento. Também muda pelo menu do ícone.
 - `media_idle_minutes` (padrão 10): mídia pausada há mais que isso some do app e volta quando tocar de novo. Navegadores congelam abas paradas há muito tempo: o play é aceito, mas o vídeo não toca. `0` desliga.
 - `allow_shell: true`: libera o **terminal livre** no app. Qualquer celular pareado roda qualquer coisa como seu usuário; deixe desligado se não usar. No Windows os comandos rodam via `cmd.exe`; no Linux, via `/bin/sh`.
 - `devices` / `revoked`: mantidos pelo agente (celulares pareados e revogados). Não edite à mão.
@@ -147,6 +149,19 @@ Com o PC ligado, **Agendar** desliga ou suspende depois de um tempo (1 minuto a 
 - **Widget** (tela inicial → Widgets → Velksync): nome do PC, último estado visto pelo app ("visto às 16:40") e um botão que pede confirmação. Com o PC desligado, **Ligar** num diálogo do próprio Android; ligado, **Desligar** abre o app, que confere o estado real e pergunta antes.
 - Os dois usam o PC escolhido em **Configurações → Bloco "Ligar PC"**. Nenhum deles guarda credenciais: só nome, MAC e estado.
 
+## 8.1 Ícone na bandeja (Windows)
+
+O agente mostra o ícone do Velksync perto do relógio. Pelo menu (botão direito ou clique):
+
+- **Parear um celular…**: janela com o QR, que fecha sozinha quando o celular parear. O QR não vai para o disco.
+- **Celulares pareados**: lista com **Revogar…** para cada um.
+- **Conferir Wake-on-LAN…**: o mesmo diagnóstico do instalador; **Corrigir** pede administrador só nessa hora.
+- **Cancelar** um desligamento agendado, quando houver.
+- **Avisar o que os celulares fazem**: liga ou desliga os avisos do Windows.
+- **Abrir o log**, **Abrir a pasta da configuração** e **Sair do agente…** (volta no próximo login; ligar pelo celular continua funcionando).
+
+Quando um celular pede para desligar, reiniciar ou suspender com alguém usando o PC (sessão desbloqueada), aparece uma contagem de 10 s com **Cancelar** (o botão padrão) e **Desligar agora**. Se alguém cancela, o celular recebe o aviso. Com a tela bloqueada, executa na hora.
+
 ## 9. Rodar o app
 
 ```sh
@@ -197,6 +212,7 @@ Em *Settings → Secrets and variables → Actions* do repositório, crie `ANDRO
 | Força bruta | 10 falhas de autenticação em 1 minuto bloqueiam o IP por 5 minutos. |
 | Servidor | Limites de tempo de leitura e de cabeçalho; no máximo 3 canais ao vivo por celular. |
 | Presença | Desafio-resposta com HMAC e segredo próprio (derivado do token mestre); processo sem privilégios, sandbox no Linux, limite de respostas por IP. |
+| Bandeja (Windows) | Nenhuma porta nova: o menu faz o que a linha de comando já faz, como o seu usuário. A contagem antes de desligar só se cancela no próprio PC. Avisos mostram o nome do celular e do comando, nunca a saída. |
 | Widget e atalho | Só nome, MAC e estado; desligar sempre passa pelo app e pede confirmação. Componentes internos não exportados. |
 | Rede | Firewall liberado só para a sub-rede local (Windows: rede privada; Linux: `ufw`). |
 | Celular | Credenciais no Android Keystore (`flutter_secure_storage`), backup e transferência entre aparelhos desligados, sem HTTP em texto puro. |

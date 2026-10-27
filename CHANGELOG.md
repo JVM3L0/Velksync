@@ -12,7 +12,15 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
   testado (instalar, atualizar, desinstalar) pelo CI.
 - `velksync-agent doctor`: confere o Wake-on-LAN no Windows; `-fix` corrige.
 - `uninstall-windows.ps1` para quem instalou pelo `.zip`.
-- Diagrama do README em SVG.
+- Diagrama do README em SVG, nas versões clara e escura.
+- Ícone na bandeja do Windows: parear (janela do QR que fecha sozinha),
+  revogar celulares, conferir e corrigir o Wake-on-LAN, cancelar
+  agendamento, log, configuração e sair.
+- Contagem de 10 s antes de desligar, reiniciar ou suspender pelo celular
+  quando alguém está usando o PC (sessão desbloqueada), com Cancelar; o
+  celular é avisado se cancelarem (`power_grace_seconds`).
+- Avisos do Windows quando um celular pareia, roda um comando ou agenda o
+  desligamento (`tray_notices`).
 
 ### Alterado
 - O instalador por script não mostra mais o token mestre; veja com
