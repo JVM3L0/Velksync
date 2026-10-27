@@ -83,8 +83,12 @@ func main() {
 	case "presence":
 		err = presenceCmd(args)
 	default:
-		flag.Usage()
-		os.Exit(2)
+		dev, ok := devCommands[cmd]
+		if !ok {
+			flag.Usage()
+			os.Exit(2)
+		}
+		err = dev(args)
 	}
 	if err != nil {
 		if cmd == "" {
@@ -97,6 +101,10 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// devCommands recebe comandos de desenvolvimento, que só existem quando
+// compilados com uma tag (por exemplo -tags uipreview).
+var devCommands = map[string]func([]string) error{}
 
 func initCmd(path string, args []string) error {
 	fl := flag.NewFlagSet("init", flag.ExitOnError)
@@ -167,7 +175,9 @@ func run(configPath, logPath string) error {
 	srv := &Server{cfg: cfg, configPath: configPath, hub: NewHub()}
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("velksync-agent %s ouvindo em https://%s (terminal livre: %v, pin %s)", version, addr, cfg.AllowShell, shortPin(pin))
-	hs := newHTTPServer(addr, srv.routes(), cert)
+	handler := srv.routes()
+	srv.ui = startDesktop(srv)
+	hs := newHTTPServer(addr, handler, cert)
 	return hs.ListenAndServeTLS("", "")
 }
 
