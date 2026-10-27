@@ -520,8 +520,13 @@ func (t *tray) state() trayState {
 	s.mu.Lock()
 	devices := slices.Clone(s.cfg.Devices)
 	notices := s.cfg.trayNotices()
+	updateCheck := s.cfg.updateCheck()
 	s.mu.Unlock()
-	st := trayState{Version: version, Devices: devices, Notices: notices, Schedule: s.schedule.Current()}
+	st := trayState{Version: version, Devices: devices, Notices: notices, Schedule: s.schedule.Current(),
+		UpdateCheck: updateCheck}
+	if r, ok := s.updates.Available(); ok {
+		st.Update = r.Version()
+	}
 	if ip, err := lanIP(); err == nil {
 		st.IP = ip.String()
 	}
@@ -590,6 +595,17 @@ func (t *tray) command(cmd int) {
 		s.cfg.TrayNotices = &on
 		s.persist()
 		s.mu.Unlock()
+	case cmd == menuUpdate:
+		go t.offerUpdate()
+	case cmd == menuUpdateCheck:
+		s.mu.Lock()
+		on := !s.cfg.updateCheck()
+		s.cfg.UpdateCheck = &on
+		s.persist()
+		s.mu.Unlock()
+		if on {
+			go s.updates.Check()
+		}
 	case cmd == menuLog:
 		shellOpen(defaultLogPath(s.configPath))
 	case cmd == menuConfig:
@@ -873,7 +889,15 @@ func (t *tray) doctor() {
 	if err != nil || pressed != idPrimary {
 		return
 	}
-	if err := runElevated("doctor -fix " + strings.Join(fix, ",")); err != nil {
+	exe, err := os.Executable()
+	if err != nil {
+		t.info("Wake-on-LAN", err.Error())
+		return
+	}
+	if code, err := runElevated(exe, "doctor -fix "+strings.Join(fix, ","), true); err != nil || code != 0 {
+		if err == nil {
+			err = fmt.Errorf("saiu com o código %d", code)
+		}
 		if !errors.Is(err, windows.ERROR_CANCELLED) {
 			t.info("Wake-on-LAN", "Nem tudo foi corrigido: "+err.Error())
 		}
@@ -900,32 +924,71 @@ type shellExecuteInfo struct {
 	Process    windows.Handle
 }
 
-// runElevated roda o próprio agente como administrador (o Windows pergunta)
-// e espera terminar.
-func runElevated(args string) error {
-	exe, err := os.Executable()
-	if err != nil {
-		return err
-	}
+// runElevated roda um programa como administrador (o Windows pergunta). Com
+// wait, espera terminar e devolve o código de saída; ERROR_CANCELLED se a
+// pessoa recusou o UAC.
+func runElevated(file, args string, wait bool) (uint32, error) {
 	const seeMaskNoCloseProcess, seeMaskNoAsync = 0x40, 0x100
 	sei := shellExecuteInfo{Mask: seeMaskNoCloseProcess | seeMaskNoAsync, Show: swHide}
+	if !wait {
+		sei.Show = swShow // o instalador mostra o progresso
+	}
 	sei.Size = uint32(unsafe.Sizeof(sei))
 	sei.Verb, _ = windows.UTF16PtrFromString("runas")
-	sei.File, _ = windows.UTF16PtrFromString(exe)
+	sei.File, _ = windows.UTF16PtrFromString(file)
 	sei.Parameters, _ = windows.UTF16PtrFromString(args)
 	if r, _, err := procShellExecuteEx.Call(uintptr(unsafe.Pointer(&sei))); r == 0 {
-		return err
+		return 0, err
 	}
 	defer windows.CloseHandle(sei.Process)
+	if !wait {
+		return 0, nil
+	}
 	windows.WaitForSingleObject(sei.Process, windows.INFINITE)
 	var code uint32
-	if err := windows.GetExitCodeProcess(sei.Process, &code); err != nil {
-		return err
+	err := windows.GetExitCodeProcess(sei.Process, &code)
+	return code, err
+}
+
+// offerUpdate mostra as novidades e, se a pessoa quiser, baixa o instalador,
+// confere a assinatura e o roda. O instalador para este agente e sobe o novo.
+func (t *tray) offerUpdate() {
+	u := t.srv.updates
+	r, ok := u.Available()
+	if !ok {
+		return
 	}
-	if code != 0 {
-		return fmt.Errorf("saiu com o código %d", code)
+	pressed, _ := taskDialog(taskDialogOpts{
+		instruction: "Velksync " + r.Version() + " disponível",
+		content:     releaseNotes(r, 700),
+		footer:      "O Windows vai pedir permissão de administrador. A configuração e os celulares pareados continuam.",
+		icon:        tdIconInfo, button: "Atualizar", common: tdcbfCancel, defaultID: idPrimary,
+	})
+	if pressed != idPrimary {
+		return
 	}
-	return nil
+	t.Notify("Baixando o Velksync "+r.Version(), "Leva alguns segundos; o instalador abre em seguida.")
+	name := "velksync-setup-" + r.Version() + "-windows-amd64.exe"
+	data, err := u.fetchVerified(r, name)
+	if err != nil {
+		log.Printf("atualização: %v", err)
+		t.info("Não deu para atualizar", err.Error()+"\n\nNada foi instalado. Dá para baixar pela página de versões.")
+		return
+	}
+	dir, err := os.MkdirTemp("", "velksync-update")
+	if err == nil {
+		path := filepath.Join(dir, name)
+		if err = os.WriteFile(path, data, 0o600); err == nil {
+			log.Printf("atualização: instalando %s (assinatura conferida)", r.Version())
+			_, err = runElevated(path, "/SILENT /SUPPRESSMSGBOXES /NORESTART", false)
+		}
+	}
+	if err != nil {
+		os.RemoveAll(dir)
+		if !errors.Is(err, windows.ERROR_CANCELLED) {
+			t.info("Não deu para atualizar", err.Error())
+		}
+	}
 }
 
 // ---------- Janela do QR ----------

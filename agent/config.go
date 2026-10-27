@@ -49,8 +49,10 @@ type Config struct {
 	TrayNotices *bool `json:"tray_notices,omitempty"`
 	// Acesso à API do Pear Desktop (capas em alta), pedido na primeira vez
 	// que ele toca. pear_denied: negado no Pear; apague para pedir de novo.
-	PearToken  string `json:"pear_token,omitempty"`
-	PearDenied bool   `json:"pear_denied,omitempty"`
+	// Procurar versão nova no GitHub uma vez por dia. Ausente: ligado.
+	UpdateCheck *bool  `json:"update_check,omitempty"`
+	PearToken   string `json:"pear_token,omitempty"`
+	PearDenied  bool   `json:"pear_denied,omitempty"`
 	// Celulares pareados neste sistema (só para listar) e ids revogados.
 	// No dual boot, revogue nos dois sistemas.
 	Devices []PairedDevice `json:"devices,omitempty"`
@@ -134,6 +136,8 @@ func (c Config) powerGrace() time.Duration {
 }
 
 func (c Config) trayNotices() bool { return c.TrayNotices == nil || *c.TrayNotices }
+
+func (c Config) updateCheck() bool { return c.UpdateCheck == nil || *c.UpdateCheck }
 
 func saveConfig(path string, cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

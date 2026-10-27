@@ -202,6 +202,43 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      # Só a chave pública e o CHANGELOG: este job não compila nada.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: repo
+          sparse-checkout: |
+            agent/release_key.pem
+            CHANGELOG.md
+          sparse-checkout-cone-mode: false
+      # O atualizador do agente só instala o que esta assinatura cobrir.
+      - name: Assinar o SHA256SUMS
+        env:
+          SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          set -eu
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::Configure o Secret RELEASE_SIGNING_KEY (ver README, Releases)"
+            exit 1
+          fi
+          umask 077
+          key="$RUNNER_TEMP/signing.pem"
+          trap 'rm -f "$key"' EXIT
+          echo "$SIGNING_KEY" | base64 -d > "$key"
+          openssl pkeyutl -sign -rawin -inkey "$key" -in dist/SHA256SUMS -out dist/SHA256SUMS.sig
+          # Confere com a chave pública que vai dentro do agente: chave errada
+          # falha aqui, não no PC de alguém.
+          openssl pkeyutl -verify -pubin -inkey repo/agent/release_key.pem -rawin \
+            -in dist/SHA256SUMS -sigfile dist/SHA256SUMS.sig
+      - name: Novidades desta versão
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          v="${TAG#v}"
+          awk -v v="$v" 'index($0, "## [" v "]") == 1 {on=1; next} on && /^## \[/ {exit} on' repo/CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "::error::CHANGELOG sem a seção [$v]"; exit 1; }
+          cat notes.md
       # Atestados exigem repositório público (ou GitHub Enterprise).
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: ${{ !github.event.repository.private }}
@@ -211,4 +248,4 @@ jobs:
         with:
           files: dist/*
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          body_path: notes.md

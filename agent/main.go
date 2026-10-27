@@ -183,6 +183,14 @@ func run(configPath, logPath string) error {
 	})
 	handler := srv.routes()
 	srv.ui = startDesktop(srv)
+	srv.updates = newUpdater(configPath, func() bool {
+		srv.mu.Lock()
+		defer srv.mu.Unlock()
+		return srv.cfg.updateCheck()
+	}, func(r releaseInfo) {
+		srv.ui.Notify("Velksync "+r.Version()+" disponível", "Atualize pelo menu do ícone do Velksync.")
+	})
+	go srv.updates.Loop()
 	hs := newHTTPServer(addr, handler, cert)
 	return hs.ListenAndServeTLS("", "")
 }

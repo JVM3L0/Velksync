@@ -28,6 +28,7 @@ type Server struct {
 	live       *Live
 	schedule   *Scheduler
 	ui         desktop
+	updates    *updater
 	notices    *noticeBatcher
 	mu         sync.Mutex // protege cfg.Devices, cfg.Revoked e cfg.TrayNotices
 }
@@ -149,7 +150,17 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		// O app usa o que existir aqui e cai no comportamento antigo no resto.
 		"features": []string{"live", "presence", "schedule"},
 		"schedule": s.schedule.Current(),
+		"update":   s.updateInfo(),
 	})
+}
+
+// updateInfo é a versão nova do agente, para o app avisar; nil sem novidade.
+func (s *Server) updateInfo() map[string]string {
+	r, ok := s.updates.Available()
+	if !ok {
+		return nil
+	}
+	return map[string]string{"version": r.Version(), "url": r.Page}
 }
 
 func (s *Server) power(w http.ResponseWriter, r *http.Request) {

@@ -138,6 +138,8 @@ const (
 	menuLog
 	menuConfig
 	menuQuit
+	menuUpdate
+	menuUpdateCheck
 	menuRevokeBase = 1000 // + índice do celular em trayState.Devices
 )
 
@@ -157,6 +159,9 @@ type trayState struct {
 	Devices  []PairedDevice
 	Schedule *PowerSchedule
 	Notices  bool
+	// Update é a versão nova disponível ("" sem novidade).
+	Update      string
+	UpdateCheck bool
 }
 
 var sep = menuItem{Sep: true}
@@ -185,7 +190,11 @@ func trayMenu(st trayState) []menuItem {
 		devices = menuItem{Text: "Nenhum celular pareado", Disabled: true}
 	}
 
-	items := append(status, sep,
+	items := append(status, sep)
+	if st.Update != "" {
+		items = append(items, menuItem{ID: menuUpdate, Text: "Atualizar para " + st.Update + "…"}, sep)
+	}
+	items = append(items,
 		menuItem{ID: menuPair, Text: "Parear um celular…"},
 		devices,
 		menuItem{ID: menuDoctor, Text: "Conferir Wake-on-LAN…"},
@@ -195,6 +204,7 @@ func trayMenu(st trayState) []menuItem {
 	}
 	return append(items, sep,
 		menuItem{ID: menuNotices, Text: "Avisar o que os celulares fazem", Checked: st.Notices},
+		menuItem{ID: menuUpdateCheck, Text: "Procurar atualizações", Checked: st.UpdateCheck},
 		menuItem{ID: menuLog, Text: "Abrir o log"},
 		menuItem{ID: menuConfig, Text: "Abrir a pasta da configuração"},
 		sep,
