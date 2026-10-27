@@ -39,6 +39,42 @@ jobs:
       - name: Testes
         run: go test -race -count=1 ./...
 
+  installer:
+    name: Instalador Windows
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - name: Compilar o agente
+        working-directory: agent
+        env:
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags "-H=windowsgui" -o ..\out\velksync-agent.exe .
+      # Já vem nas máquinas Windows do GitHub; o Chocolatey é só reserva.
+      - name: Inno Setup
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Compilar o instalador
+        run: |
+          $v = (Select-String -Path agent\main.go -Pattern '^const version = "(.+)"').Matches[0].Groups[1].Value
+          agent\deploy\build-installer.ps1 -Version $v -AgentExe out\velksync-agent.exe -OutDir out
+      # A máquina do CI é descartável: dá para instalar e desinstalar de verdade.
+      - name: Instalar, atualizar e desinstalar
+        run: agent\deploy\test-installer.ps1 -Setup (Get-Item out\velksync-setup-*.exe).FullName
+      - name: Doctor lê a placa sem erro
+        run: |
+          out\velksync-agent.exe doctor -out out\doctor.ini | Out-Host
+          if (-not (Test-Path out\doctor.ini)) { throw "doctor não gravou o INI" }
+
   app:
     name: App
     runs-on: ubuntu-latest

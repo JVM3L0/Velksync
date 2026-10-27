@@ -1,5 +1,6 @@
-# Gera a release a cada tag vX.Y.Z: testa, compila o agente (Linux/Windows) e o
-# APK assinado, publica com checksums e atestado de proveniência (SLSA).
+# Gera a release a cada tag vX.Y.Z: testa, compila o agente (Linux/Windows), o
+# instalador do Windows e o APK assinado, publica com checksums
+# e atestado de proveniência (SLSA).
 #
 # Segurança: ações fixadas por hash de commit (não por tag, que pode ser
 # movida), nenhuma permissão por padrão e cada job pede só o que usa.
@@ -67,7 +68,7 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../out/linux/velksync-agent .
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H=windowsgui" -o ../out/windows/velksync-agent.exe .
           cp deploy/install-linux.sh deploy/velksync-agent.service deploy/velksync-presence.service ../out/linux/
-          cp deploy/install-windows.ps1 ../out/windows/
+          cp deploy/install-windows.ps1 deploy/uninstall-windows.ps1 ../out/windows/
           cd ../out
           tar -czf "velksync-agent-${VERSION}-linux-amd64.tar.gz" -C linux .
           (cd windows && zip -q "../velksync-agent-${VERSION}-windows-amd64.zip" ./*)
@@ -77,6 +78,41 @@ jobs:
           path: |
             out/*.tar.gz
             out/*.zip
+          if-no-files-found: error
+
+  installer:
+    name: Instalador Windows
+    needs: agent
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # O mesmo .exe do .zip, compilado no job do agente.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: agent
+          path: agent-dist
+      # Já vem nas máquinas Windows do GitHub; o Chocolatey é só reserva.
+      - name: Inno Setup
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Compilar e testar o instalador
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          $v = $env:VERSION.TrimStart("v")
+          Expand-Archive "agent-dist\velksync-agent-$env:VERSION-windows-amd64.zip" agent-zip
+          agent\deploy\build-installer.ps1 -Version $v -AgentExe agent-zip\velksync-agent.exe -OutDir out
+          agent\deploy\test-installer.ps1 -Setup (Get-Item out\velksync-setup-*.exe).FullName
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: installer
+          path: out/velksync-setup-*.exe
           if-no-files-found: error
 
   app:
@@ -149,7 +185,7 @@ jobs:
 
   release:
     name: Publicar release
-    needs: [agent, app]
+    needs: [agent, installer, app]
     runs-on: ubuntu-latest
     permissions:
       contents: write # criar a release
