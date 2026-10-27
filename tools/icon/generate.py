@@ -5,6 +5,8 @@ Uso (precisa do resvg-py; com uv não instala nada no sistema):
     uv run --no-project --with resvg-py python tools/icon/generate.py sheet variacoes.png
     uv run --no-project --with resvg-py python tools/icon/generate.py docs docs
         (ícone do README e prévia 1280x640 para o GitHub, em docs/)
+    uv run --no-project --with resvg-py --with pillow python tools/icon/generate.py windows agent/deploy/installer
+        (velksync.ico e as imagens BMP do instalador)
 
 
 Canvas do ícone adaptativo: 108x108; o launcher mostra o miolo 72x72 (18..90)
@@ -155,3 +157,33 @@ if __name__ == "__main__":
             f'<text x="504" y="440" font-family="Ubuntu, DejaVu Sans" font-size="30" fill="{ICE_LO}">Windows e Linux · rede local · código aberto</text>'
             "</svg>")
         open(os.path.join(out, "social-preview.png"), "wb").write(render(preview))
+
+    elif mode == "windows":
+        import io
+        import os
+
+        from PIL import Image
+        out = sys.argv[2]
+        os.makedirs(out, exist_ok=True)
+        body = design(VARIANTS["b"])
+        png = lambda svg: Image.open(io.BytesIO(bytes(resvg_py.svg_to_bytes(svg_string=svg)))).convert("RGBA")
+        square = lambda size: png(f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}">'
+                                  + tile(body, 0, 0, size, "square", "w") + "</svg>")
+        square(256).save(os.path.join(out, "velksync.ico"), sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
+        # O Inno Setup escolhe a imagem pela escala da tela; BMP sem transparência.
+        for scale in (1, 2):
+            n = 55 * scale
+            small = Image.new("RGB", (n, n), "white")
+            icon = square(n)
+            small.paste(icon, (0, 0), icon)
+            small.save(os.path.join(out, f"small-{scale}x.bmp"))
+            w, h = 164 * scale, 314 * scale
+            side = png(
+                f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 164 314">'
+                f'<defs><linearGradient id="sbg" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="{NAVY_A}"/>'
+                f'<stop offset="1" stop-color="{NAVY_B}"/></linearGradient></defs>'
+                '<rect width="164" height="314" fill="url(#sbg)"/>'
+                + tile(body, 32, 92, 100, "square", "s")
+                + f'<text x="82" y="228" text-anchor="middle" font-family="Ubuntu, DejaVu Sans" font-weight="700" '
+                f'font-size="22" fill="{ICE_HI}">Velksync</text></svg>')
+            side.convert("RGB").save(os.path.join(out, f"side-{scale}x.bmp"))
