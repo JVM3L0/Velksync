@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" role="img" aria-labelledby="t d">
+  <title id="t">Como o Velksync funciona</title>
+  <desc id="d">O celular liga o PC por Wake-on-LAN, controla o agente por HTTPS com certificado fixado, recebe desempenho, mídia e avisos ao vivo, e vê o PC ligado antes do login pelo sinal de presença. Tudo na rede local.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#16345F"/>
+      <stop offset="1" stop-color="#060F22"/>
+    </linearGradient>
+    <linearGradient id="ice" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2FBFF"/>
+      <stop offset="0.55" stop-color="#A8DDFF"/>
+      <stop offset="1" stop-color="#4BA8E8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1D3D6B"/>
+      <stop offset="1" stop-color="#11284A"/>
+    </linearGradient>
+    <marker id="aWol" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#FFD166"/></marker>
+    <marker id="aTls" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A8DDFF"/></marker>
+    <marker id="aLive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7BE0AD"/></marker>
+    <marker id="aPres" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#C9B3FF"/></marker>
+    <style>
+      text { font-family: "Segoe UI", Ubuntu, "Helvetica Neue", Arial, sans-serif; }
+      .h { font-size: 17px; font-weight: 700; fill: #F2FBFF; }
+      .s { font-size: 13px; fill: #A8DDFF; }
+      .lbl { font-size: 13.5px; font-weight: 600; }
+      .sub { font-size: 12px; fill: #8FB3D9; }
+      .mono { font-family: "Cascadia Mono", "Ubuntu Mono", Consolas, monospace; font-size: 12px; fill: #8FB3D9; }
+    </style>
+  </defs>
+
+  <rect width="960" height="560" rx="24" fill="url(#bg)"/>
+
+  <!-- Rede local -->
+  <rect x="24" y="24" width="912" height="468" rx="18" fill="none" stroke="#4BA8E8" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="7 6"/>
+  <rect x="44" y="12" width="236" height="24" rx="12" fill="#0B1A33"/>
+  <text x="58" y="29" class="s" font-weight="600">Sua rede de casa · nada sai dela</text>
+
+  <!-- Celular -->
+  <rect x="64" y="96" width="176" height="336" rx="30" fill="#0B1A33" stroke="#A8DDFF" stroke-width="2"/>
+  <rect x="76" y="118" width="152" height="292" rx="16" fill="url(#card)"/>
+  <rect x="134" y="104" width="36" height="6" rx="3" fill="#A8DDFF" fill-opacity="0.5"/>
+  <g transform="translate(118 150)">
+    <rect width="68" height="68" rx="16" fill="#0B1A33"/>
+    <path d="M34,56 L13,23 L20,26 L21,19 L27,28 L29,21 L34,36 Z" fill="url(#ice)" stroke="#F2FBFF" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M34,56 L55,23 L48,26 L47,19 L41,28 L39,21 L34,36 Z" fill="url(#ice)" stroke="#F2FBFF" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+  <text x="152" y="250" class="h" text-anchor="middle">App Velksync</text>
+  <text x="152" y="270" class="s" text-anchor="middle">Android</text>
+  <g font-size="12">
+    <rect x="92" y="292" width="120" height="26" rx="13" fill="#FFD166" fill-opacity="0.16"/>
+    <text x="152" y="309" text-anchor="middle" fill="#FFD166">Ligar · Desligar</text>
+    <rect x="92" y="324" width="120" height="26" rx="13" fill="#7BE0AD" fill-opacity="0.16"/>
+    <text x="152" y="341" text-anchor="middle" fill="#7BE0AD">Desempenho · Mídia</text>
+    <rect x="92" y="356" width="120" height="26" rx="13" fill="#A8DDFF" fill-opacity="0.16"/>
+    <text x="152" y="373" text-anchor="middle" fill="#A8DDFF">Comandos · Terminal</text>
+  </g>
+
+  <!-- PC -->
+  <rect x="600" y="68" width="304" height="392" rx="20" fill="#0B1A33" stroke="#A8DDFF" stroke-width="2"/>
+  <text x="624" y="100" class="h">PC</text>
+  <text x="652" y="100" class="s">Windows ou Linux (dual boot)</text>
+
+  <rect x="620" y="118" width="264" height="74" rx="14" fill="url(#card)" stroke="#FFD166" stroke-opacity="0.6"/>
+  <text x="640" y="148" class="lbl" fill="#FFD166">Placa de rede</text>
+  <text x="640" y="170" class="sub">acorda o PC desligado</text>
+
+  <rect x="620" y="210" width="264" height="132" rx="14" fill="url(#card)" stroke="#A8DDFF" stroke-opacity="0.6"/>
+  <text x="640" y="240" class="lbl" fill="#F2FBFF">velksync-agent</text>
+  <text x="640" y="262" class="sub">energia, comandos, mídia, terminal,</text>
+  <text x="640" y="280" class="sub">desempenho e avisos para o celular</text>
+  <text x="640" y="320" class="mono">roda quando você entra</text>
+
+  <rect x="620" y="360" width="264" height="80" rx="14" fill="url(#card)" stroke="#C9B3FF" stroke-opacity="0.6"/>
+  <text x="640" y="390" class="lbl" fill="#C9B3FF">Sinal de presença</text>
+  <text x="640" y="412" class="sub">"estou ligado", antes do login,</text>
+  <text x="640" y="428" class="sub">sem acesso a nada</text>
+
+  <!-- Canais -->
+  <line x1="252" y1="155" x2="610" y2="155" stroke="#FFD166" stroke-width="2.5" marker-end="url(#aWol)"/>
+  <text x="270" y="145" class="lbl" fill="#FFD166">Wake-on-LAN</text>
+  <text x="270" y="175" class="mono">pacote mágico · UDP 9</text>
+
+  <line x1="252" y1="246" x2="610" y2="246" stroke="#A8DDFF" stroke-width="2.5" marker-end="url(#aTls)"/>
+  <text x="270" y="236" class="lbl" fill="#A8DDFF">Comandos por HTTPS</text>
+  <text x="270" y="266" class="mono">TLS 1.3, certificado fixado · TCP 41100</text>
+
+  <line x1="610" y1="304" x2="252" y2="304" stroke="#7BE0AD" stroke-width="2.5" stroke-dasharray="9 5" marker-end="url(#aLive)"/>
+  <text x="270" y="294" class="lbl" fill="#7BE0AD">Ao vivo, só quando muda</text>
+  <text x="270" y="324" class="mono">desempenho, mídia e avisos · SSE</text>
+
+  <line x1="252" y1="400" x2="610" y2="400" stroke="#C9B3FF" stroke-width="2.5" marker-start="url(#aPres)" marker-end="url(#aPres)"/>
+  <text x="270" y="390" class="lbl" fill="#C9B3FF">Presença e descoberta</text>
+  <text x="270" y="420" class="mono">UDP 41101</text>
+
+  <!-- Segurança -->
+  <g class="s" font-size="13">
+    <text x="48" y="526"><tspan fill="#F2FBFF" font-weight="700">Segurança:</tspan>  credencial própria por celular, revogável · firewall só para a rede local · terminal livre desligado por padrão</text>
+  </g>
+</svg>

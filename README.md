@@ -6,13 +6,9 @@
 
 Liga, desliga e roda comandos no PC (Windows e Linux, dual boot) pelo celular, na rede local. O PC também manda ações para o celular.
 
-```
-celular (app Flutter)  ── Wake-on-LAN (UDP 9) ──────────▶  placa de rede do PC desligado
-                       ── HTTPS com pin (TCP 41100) ────▶  velksync-agent (energia, comandos, mídia, terminal)
-                       ◀─ ao vivo SSE (/api/live) ──────   desempenho e mídia, só quando muda
-                       ◀─ eventos SSE (/api/events) ────   velksync-agent send ...
-                       ── presença/descoberta (UDP 41101) ▶ velksync-agent presence (antes do login)
-```
+<p align="center"><img src="docs/arquitetura.svg" width="100%" alt="Diagrama: o app no celular liga a placa de rede do PC por Wake-on-LAN (UDP 9), manda comandos ao velksync-agent por HTTPS com certificado fixado (TCP 41100), recebe desempenho, mídia e avisos ao vivo por SSE e conversa com o sinal de presença (UDP 41101), que responde antes do login. Tudo dentro da rede de casa."></p>
+
+**Começo rápido no Windows:** baixe o `velksync-setup-…-windows-amd64.exe` na [página de versões](https://github.com/JVM3L0/Velksync/releases/latest), abra e siga as telas. No fim, escaneie o QR com o app.
 
 - `agent/`: agente em Go. Um binário para Linux e um `.exe` para Windows.
 - `app/`: app Flutter (Android; iOS com ressalvas, ver abaixo).
@@ -20,7 +16,7 @@ celular (app Flutter)  ── Wake-on-LAN (UDP 9) ──────────
 ## 1. Preparar o PC para Wake-on-LAN
 
 1. **BIOS/UEFI**: ative "Wake on LAN" / "Power On By PCI-E". Ligue o PC **por cabo**: WoL por Wi-Fi quase nunca funciona.
-2. **Windows**:
+2. **Windows**: o instalador confere e corrige os itens abaixo (ou rode `velksync-agent doctor`, e `-fix` para corrigir, como administrador). À mão:
    - Gerenciador de Dispositivos → placa de rede → *Avançado*: "Wake on Magic Packet" = Ativado.
    - Na aba *Gerenciamento de Energia*, marque "Permitir que este dispositivo ative o computador".
    - Desative a **Inicialização Rápida** (Painel de Controle → Opções de Energia → Escolher a função dos botões). Com ela ativa, o desligamento é uma hibernação e a placa costuma não acordar.
@@ -30,25 +26,43 @@ celular (app Flutter)  ── Wake-on-LAN (UDP 9) ──────────
 
 ## 2. Instalar o agente
 
-Compile (precisa de Go 1.26+; dá para compilar os dois no WSL/Linux):
+**Use o mesmo token mestre nos dois sistemas.** Instale primeiro em um, veja o token com `velksync-agent token` e passe-o ao instalar no outro. Dele derivam o certificado HTTPS e as credenciais dos celulares, então os dois sistemas do dual boot são o mesmo PC para o app.
+
+### Windows: instalador
+
+Baixe o `velksync-setup-<versão>-windows-amd64.exe` e o `SHA256SUMS` na [página de versões](https://github.com/JVM3L0/Velksync/releases/latest) e abra o instalador. Ele pede administrador e mostra, nesta ordem:
+
+1. **Boas-vindas**: o que vai ser instalado (ou atualizado, se já houver uma instalação).
+2. **Wake-on-LAN**: confere cabo, "Wake on Magic Packet", a permissão da placa para ligar o PC, a Inicialização Rápida e se a rede está como Privada. Cada item com problema tem uma caixa "Corrigir"; nada muda sem ela marcada. A BIOS não dá para ver de dentro do Windows: veja a seção 1.
+3. **Dual boot**: primeira instalação ou "já instalei no Linux", com o token de lá (que vai por arquivo temporário, nunca pela linha de comando nem pelo log).
+4. **Pronto**: marque "Parear um celular agora" e escaneie o QR com o app. Uma janela avisa quando o celular parear.
+
+Para atualizar, abra o instalador da versão nova: a configuração e os celulares pareados continuam. Para remover, use **Configurações → Aplicativos → Velksync**; ele pergunta se você quer manter a configuração (assim, reinstalar não exige parear de novo).
+
+> **"O Windows protegeu o computador"**: o instalador não tem assinatura de código paga, então o SmartScreen avisa. Confira o arquivo antes (`(Get-FileHash .\velksync-setup-*.exe).Hash.ToLower()` deve bater com a linha dele no `SHA256SUMS`) e clique em *Mais informações → Executar assim mesmo*.
+
+### Compilar o agente
+
+Precisa de Go 1.26+; dá para compilar os dois no WSL/Linux:
 
 ```sh
 cd agent && ./build.sh      # gera agent/dist/linux e agent/dist/windows
 ```
 
-**Use o mesmo token mestre nos dois sistemas.** Instale primeiro em um, copie o token exibido e passe-o ao instalar no outro. Dele derivam o certificado HTTPS e as credenciais dos celulares, então os dois sistemas do dual boot são o mesmo PC para o app.
+O instalador do Windows é gerado pelo [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`agent/deploy/build-installer.ps1`); o CI compila e testa a cada envio.
 
 **Linux** (serviço systemd do usuário, mais o serviço de presença do sistema, que pede `sudo`):
 ```sh
 cd agent/dist/linux && ./install-linux.sh            # ou: ./install-linux.sh <token-do-windows>
 ```
 
-**Windows** (PowerShell como administrador; roda no logon, sem janela):
+**Windows sem o instalador** (o `.zip` da página de versões ou o `agent/dist/windows`; PowerShell como administrador; roda no logon, sem janela):
 ```powershell
 cd agent\dist\windows
 powershell -ExecutionPolicy Bypass -File install-windows.ps1 -Token <token-do-linux>
+powershell -ExecutionPolicy Bypass -File uninstall-windows.ps1   # para remover (-RemoveConfig apaga também a configuração)
 ```
-O instalador também cria a tarefa **Velksync Presence**, que sobe no boot como `LocalService` (antes de qualquer login). Para atualizar, rode o instalador de novo: ele para as tarefas, troca os binários e reinicia.
+O script também cria a tarefa **Velksync Presence**, que sobe no boot como `LocalService` (antes de qualquer login). Para atualizar, rode o instalador de novo: ele para as tarefas, troca os binários e reinicia.
 
 A rede do Windows precisa estar como **Privada**: as regras de firewall valem só para ela e só para a sub-rede local. No Linux, o instalador libera as portas no `ufw` também só para a sub-rede local.
 
@@ -139,7 +153,7 @@ flutter run          # com o celular conectado (depuração USB ou sem fio)
 flutter build apk    # APK de release em build/app/outputs/flutter-apk/
 ```
 
-No app, em **Adicionar PC → Escanear QR do PC**: com o agente rodando, execute `velksync-agent pair` no PC e aponte a câmera. No Linux o QR aparece no terminal; no Windows abre como imagem. O QR leva o pin do certificado do PC e um código de uso único (5 minutos), trocado por uma credencial só deste celular. O `pair` percebe a leitura e apaga a imagem sozinho (também apaga se expirar ou com Ctrl+C).
+No app, em **Adicionar PC → Escanear QR do PC**: com o agente rodando, execute `velksync-agent pair` no PC e aponte a câmera. No Linux o QR aparece no terminal; no Windows abre como imagem (o instalador oferece isso no fim). O QR leva o pin do certificado do PC e um código de uso único (5 minutos), trocado por uma credencial só deste celular. O `pair` percebe a leitura e apaga a imagem sozinho (também apaga se expirar ou com Ctrl+C).
 
 Sem o QR dá para cadastrar um PC só com IP e MAC: ele fica "não pareado" e serve apenas para ligar. Para controlar, edite o PC e escaneie o QR.
 
@@ -158,7 +172,7 @@ Use um **celular de verdade no mesmo Wi-Fi**. O emulador Android fica atrás de 
 
 ## Releases
 
-Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APKs assinados, um por processador (no celular, baixe o **`-arm64.apk`**; aparelhos antigos, o `-armv7.apk`), agente para Linux (`.tar.gz`) e Windows (`.zip`), `SHA256SUMS` e atestado de proveniência (repositórios públicos). A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
+Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APKs assinados, um por processador (no celular, baixe o **`-arm64.apk`**; aparelhos antigos, o `-armv7.apk`), agente para Linux (`.tar.gz`) e Windows (instalador `velksync-setup-….exe` e `.zip`), `SHA256SUMS` e atestado de proveniência (repositórios públicos). A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
 
 Configuração única da chave de assinatura do app:
 
