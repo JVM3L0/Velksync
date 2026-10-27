@@ -3,6 +3,24 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+- Instalador do Windows (`velksync-setup-…-windows-amd64.exe`): confere e
+  corrige o Wake-on-LAN, pede o token do Linux no dual boot, pareia o
+  celular no fim e aparece em Aplicativos, com desinstalador. Compilado e
+  testado (instalar, atualizar, desinstalar) pelo CI.
+- `velksync-agent doctor`: confere o Wake-on-LAN no Windows; `-fix` corrige.
+- `uninstall-windows.ps1` para quem instalou pelo `.zip`.
+- Diagrama do README em SVG.
+
+### Alterado
+- O instalador por script não mostra mais o token mestre; veja com
+  `velksync-agent token`. `init -token-file` lê o token de um arquivo.
+- `pair` espera o agente subir e, aberto sem terminal, avisa por janela
+  quando o celular parear.
+- "Como atualizar" no app indica o instalador no Windows.
+
 ## [0.4.1] - 2026-10-25
 
 ### Adicionado

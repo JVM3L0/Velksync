@@ -108,12 +108,15 @@ uso, testes e esboço antes de implementar.
 | 10 | Avisos do PC com o app fechado | grande | custo de bateria ou privacidade |
 | 11 | Primeira vez guiada: o que é o agente, QR e teste de ligar ("Funcionou?") | médio | hoje quem instala cai numa tela vazia |
 | 12 | Ligar e desligar pelo Gemini ("liga o Velkhyro"), via AppFunctions | pequeno | depende do Google liberar a integração (em teste fechado em maio/2026); ligar sem confirmação, desligar pede confirmação no app |
+| 13 | Assinar o instalador do Windows pela SignPath Foundation (grátis para código aberto) | pequeno | tira o aviso do SmartScreen; exige inscrição e revisão do projeto por eles |
+| 14 | Pacote `.deb`/`.rpm` e `velksync-agent setup` guiado no Linux | médio | o `doctor` ganha a parte do Linux (`ethtool`, NetworkManager) |
 
 
 ## Feito fora do plano
 
 - Publicação da v0.4.0, CI a cada envio, Dependabot, APK por processador,
   app de desenvolvimento separado e aviso de versão.
+- Instalador do Windows com `doctor` do Wake-on-LAN (a caminho da 0.5.0).
 
 ## Pendências manuais
 
