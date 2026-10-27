@@ -6,7 +6,10 @@
 
 Liga, desliga e roda comandos no PC (Windows e Linux, dual boot) pelo celular, na rede local. O PC também manda ações para o celular.
 
-<p align="center"><img src="docs/arquitetura.svg" width="100%" alt="Diagrama: o app no celular liga a placa de rede do PC por Wake-on-LAN (UDP 9), manda comandos ao velksync-agent por HTTPS com certificado fixado (TCP 41100), recebe desempenho, mídia e avisos ao vivo por SSE e conversa com o sinal de presença (UDP 41101), que responde antes do login. Tudo dentro da rede de casa."></p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/arquitetura-dark.svg">
+  <img src="docs/arquitetura-light.svg" width="100%" alt="Diagrama: o app no celular liga a placa de rede do PC por Wake-on-LAN (UDP 9), manda comandos ao velksync-agent por HTTPS com certificado fixado (TCP 41100), recebe desempenho, mídia e avisos ao vivo por SSE e conversa com o sinal de presença (UDP 41101), que responde antes do login. Tudo dentro da rede de casa.">
+</picture>
 
 **Começo rápido no Windows:** baixe o `velksync-setup-…-windows-amd64.exe` na [página de versões](https://github.com/JVM3L0/Velksync/releases/latest), abra e siga as telas. No fim, escaneie o QR com o app.
 
