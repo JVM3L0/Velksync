@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:velksync/services/agent_client.dart';
+import 'package:velksync/services/stats_history.dart';
 import 'package:velksync/ui/processes.dart';
+import 'package:velksync/ui/stats_chart.dart';
 
 void main() {
   test('lista de processos vinda do agente', () {
@@ -55,5 +57,63 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: SizedBox()));
     await tester.pump(const Duration(seconds: 10));
     expect(calls, 2, reason: 'fechada, não consulta mais');
+  });
+
+  Future<ProcessList> load() async => const ProcessList(
+    byCpu: [ProcessInfo(name: 'chrome.exe', cpu: 18, mem: 100)],
+    byMem: [ProcessInfo(name: 'Code.exe', cpu: 1, mem: 900)],
+    total: 2,
+  );
+
+  Future<void> openSheet(WidgetTester tester, Metric m, {bool direct = false}) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (c) => TextButton(
+              onPressed: () => showStatsSheet(c, StatsHistory(), m, processes: load, showProcesses: direct),
+              child: const Text('abrir'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('abrir'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+  }
+
+  testWidgets('janela do gráfico alterna para os processos, na ordem da métrica tocada', (tester) async {
+    await openSheet(tester, Metric.mem);
+    expect(find.text('Gráfico'), findsOneWidget);
+    expect(find.text('Coletando dados…'), findsOneWidget);
+    await tester.tap(find.text('Processos'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Code.exe'), findsOneWidget, reason: 'aberto pela memória: ordena por memória');
+  });
+
+  testWidgets('"Ver processos" abre direto nos processos, por CPU, e volta ao gráfico', (tester) async {
+    await openSheet(tester, Metric.cpu, direct: true);
+    await tester.pump();
+    expect(find.textContaining('chrome.exe'), findsOneWidget);
+    await tester.tap(find.text('Gráfico'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Coletando dados…'), findsOneWidget);
+  });
+
+  testWidgets('sem processos (agente antigo) não mostra o seletor', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatsSheet(history: StatsHistory(), initial: Metric.cpu),
+        ),
+      ),
+    );
+    expect(find.text('Processos'), findsNothing);
   });
 }

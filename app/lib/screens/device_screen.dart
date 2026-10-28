@@ -15,7 +15,6 @@ import '../ui/perf.dart';
 import '../ui/schedule.dart';
 import '../ui/stats_chart.dart';
 import '../ui/history.dart';
-import '../ui/processes.dart';
 import '../ui/role_colors.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
@@ -452,6 +451,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
     );
   }
 
+  /// Lista de processos do PC, se o agente tiver (0.8+).
+  Future<ProcessList> Function()? get _processesLoader => _info?.has('processes') ?? false ? _client.processes : null;
+
   Widget _performanceTab() {
     final s = _stats;
     if (s == null) return const Center(child: CircularProgressIndicator());
@@ -459,7 +461,16 @@ class _DeviceScreenState extends State<DeviceScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
       children: [
         _performanceSection(s),
-        if (_info?.has('processes') ?? false) ProcessesSection(load: _client.processes),
+        if (_processesLoader != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: FilledButton.tonalIcon(
+              onPressed: () =>
+                  showStatsSheet(context, _history, Metric.cpu, processes: _processesLoader, showProcesses: true),
+              icon: const Icon(Symbols.list_rounded),
+              label: const Text('Ver processos'),
+            ),
+          ),
       ],
     );
   }
@@ -604,7 +615,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
           accent: roles.cpu,
           temperature: s.cpuTemp,
           fallback: (icon: Symbols.timer_rounded, text: 'Ligado há ${formatUptime(s.uptime)}', fraction: null),
-          onTap: () => showStatsSheet(context, _history, Metric.cpu),
+          onTap: () => showStatsSheet(context, _history, Metric.cpu, processes: _processesLoader),
         ),
         if (gpu != null) ...[
           const SizedBox(height: 10),
@@ -614,7 +625,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
             subLabel: gpu.name,
             usage: gpu.percent / 100,
             accent: roles.gpu,
-            onTap: () => showStatsSheet(context, _history, Metric.gpu),
+            onTap: () => showStatsSheet(context, _history, Metric.gpu, processes: _processesLoader),
             temperature: gpu.temp,
             fallback: gpu.vramTotal == 0
                 ? null
@@ -635,7 +646,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 used: s.memUsed,
                 total: s.memTotal,
                 accent: roles.mem,
-                onTap: () => showStatsSheet(context, _history, Metric.mem),
+                onTap: () => showStatsSheet(context, _history, Metric.mem, processes: _processesLoader),
               ),
             ),
             const SizedBox(width: 10),

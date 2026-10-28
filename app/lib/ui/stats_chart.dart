@@ -1,8 +1,11 @@
 import 'package:flutter/scheduler.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../services/agent_client.dart';
 import '../services/stats_history.dart';
 import 'perf.dart';
+import 'processes.dart';
 import 'role_colors.dart';
 
 /// Cor de cada métrica, a mesma dos cartões do desempenho.
@@ -13,18 +16,33 @@ Color metricColor(Metric m, RoleColors roles) => switch (m) {
 };
 
 /// Folha com o gráfico dos últimos minutos; abre já com o que foi guardado
-/// e segue ao vivo enquanto aberta.
-Future<void> showStatsSheet(BuildContext context, StatsHistory history, Metric initial) => showModalBottomSheet<void>(
+/// e segue ao vivo enquanto aberta. Com [processes], alterna entre o gráfico
+/// e a lista de processos (que só é consultada enquanto está à mostra).
+Future<void> showStatsSheet(
+  BuildContext context,
+  StatsHistory history,
+  Metric initial, {
+  Future<ProcessList> Function()? processes,
+  bool showProcesses = false,
+}) => showModalBottomSheet<void>(
   context: context,
   showDragHandle: true,
   isScrollControlled: true,
-  builder: (_) => StatsSheet(history: history, initial: initial),
+  builder: (_) => StatsSheet(history: history, initial: initial, processes: processes, showProcesses: showProcesses),
 );
 
 class StatsSheet extends StatefulWidget {
   final StatsHistory history;
   final Metric initial;
-  const StatsSheet({super.key, required this.history, required this.initial});
+  final Future<ProcessList> Function()? processes;
+  final bool showProcesses;
+  const StatsSheet({
+    super.key,
+    required this.history,
+    required this.initial,
+    this.processes,
+    this.showProcesses = false,
+  });
 
   @override
   State<StatsSheet> createState() => _StatsSheetState();
@@ -32,9 +50,41 @@ class StatsSheet extends StatefulWidget {
 
 class _StatsSheetState extends State<StatsSheet> {
   late Metric _metric = widget.initial;
+  late bool _processes = widget.showProcesses && widget.processes != null;
+
+  Widget? _viewToggle() => widget.processes == null
+      ? null
+      : Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: SegmentedButton<bool>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: false, icon: Icon(Symbols.show_chart_rounded), label: Text('Gráfico')),
+              ButtonSegment(value: true, icon: Icon(Symbols.list_rounded), label: Text('Processos')),
+            ],
+            selected: {_processes},
+            onSelectionChanged: (s) => setState(() => _processes = s.first),
+          ),
+        );
 
   @override
   Widget build(BuildContext context) {
+    if (_processes) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ?_viewToggle(),
+            ProcessesSection(
+              load: widget.processes!,
+              showTitle: false,
+              initialSort: _metric == Metric.mem ? ProcessSort.mem : ProcessSort.cpu,
+            ),
+          ],
+        ),
+      );
+    }
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final h = widget.history;
@@ -51,6 +101,7 @@ class _StatsSheetState extends State<StatsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              ?_viewToggle(),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [

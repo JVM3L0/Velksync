@@ -15,7 +15,17 @@ enum ProcessSort { cpu, mem }
 class ProcessesSection extends StatefulWidget {
   final Future<ProcessList> Function() load;
   final Duration every;
-  const ProcessesSection({super.key, required this.load, this.every = const Duration(seconds: 3)});
+  final ProcessSort initialSort;
+
+  /// Com título "Processos" (seção solta) ou só a ordenação (dentro da janela do gráfico).
+  final bool showTitle;
+  const ProcessesSection({
+    super.key,
+    required this.load,
+    this.every = const Duration(seconds: 3),
+    this.initialSort = ProcessSort.cpu,
+    this.showTitle = true,
+  });
 
   @override
   State<ProcessesSection> createState() => _ProcessesSectionState();
@@ -24,7 +34,7 @@ class ProcessesSection extends StatefulWidget {
 class _ProcessesSectionState extends State<ProcessesSection> {
   ProcessList? _list;
   String? _error;
-  var _sort = ProcessSort.cpu;
+  late var _sort = widget.initialSort;
   Timer? _timer;
 
   @override
@@ -60,23 +70,28 @@ class _ProcessesSectionState extends State<ProcessesSection> {
     final text = Theme.of(context).textTheme;
     final roles = RoleColors.of(context);
     final list = _list;
+    final sortButton = SegmentedButton<ProcessSort>(
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      segments: const [
+        ButtonSegment(value: ProcessSort.cpu, label: Text('CPU')),
+        ButtonSegment(value: ProcessSort.mem, label: Text('Memória')),
+      ],
+      selected: {_sort},
+      onSelectionChanged: (s) => setState(() => _sort = s.first),
+    );
     final items = list == null ? const <ProcessInfo>[] : (_sort == ProcessSort.cpu ? list.byCpu : list.byMem);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SectionLabel(
-          'Processos',
-          action: SegmentedButton<ProcessSort>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(visualDensity: VisualDensity.compact),
-            segments: const [
-              ButtonSegment(value: ProcessSort.cpu, label: Text('CPU')),
-              ButtonSegment(value: ProcessSort.mem, label: Text('Memória')),
-            ],
-            selected: {_sort},
-            onSelectionChanged: (s) => setState(() => _sort = s.first),
+        if (widget.showTitle)
+          SectionLabel('Processos', action: sortButton)
+        else
+          // Na janela do gráfico: o seletor na largura toda (cabe em tela estreita).
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SizedBox(width: double.infinity, child: sortButton),
           ),
-        ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(color: scheme.surfaceContainer, borderRadius: BorderRadius.circular(Radii.xl)),
