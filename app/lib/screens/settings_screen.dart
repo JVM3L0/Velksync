@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device.dart';
+import '../services/app_update.dart';
 import '../services/device_store.dart';
 
 import '../services/settings.dart';
@@ -106,6 +107,8 @@ class SettingsScreen extends StatelessWidget {
                   ),
                 ),
                 const _TilePicker(),
+                const SectionLabel('Atualizações'),
+                const _UpdateCheckTile(),
               ],
             );
           },
@@ -277,6 +280,41 @@ class _Variant extends StatelessWidget {
           hint,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
+      ),
+    ],
+  );
+}
+
+/// Procurar versão nova do app no GitHub (uma vez por dia, ao abrir).
+class _UpdateCheckTile extends StatefulWidget {
+  const _UpdateCheckTile();
+
+  @override
+  State<_UpdateCheckTile> createState() => _UpdateCheckTileState();
+}
+
+class _UpdateCheckTileState extends State<_UpdateCheckTile> {
+  bool _on = true;
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((p) {
+      if (mounted) setState(() => _on = p.getBool(AppUpdater.enabledKey) ?? true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => ExpressiveGroup(
+    children: [
+      SwitchListTile(
+        value: _on,
+        title: const Text('Procurar atualizações'),
+        subtitle: const Text('Uma vez por dia, na página de versões do GitHub'),
+        onChanged: (v) async {
+          setState(() => _on = v);
+          await (await SharedPreferences.getInstance()).setBool(AppUpdater.enabledKey, v);
+        },
       ),
     ],
   );

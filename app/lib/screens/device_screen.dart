@@ -415,16 +415,25 @@ class _DeviceScreenState extends State<DeviceScreen> {
     final info = _info;
     if (info == null) return null;
     final gap = versionGap(agent: info.version);
-    if (gap == VersionGap.none || _dismissedVersion == info.version) return null;
+    // Sem diferença entre app e agente, ainda pode haver versão nova que o
+    // agente achou; "Agora não" vale por versão (a do agente ou a nova).
+    final available = gap == VersionGap.none ? info.update : null;
+    final key = available ?? info.version;
+    if ((gap == VersionGap.none && available == null) || _dismissedVersion == key) return null;
     return UpdateBanner(
-      gap: gap,
+      gap: available != null ? VersionGap.agentOld : gap,
       agentVersion: info.version,
       appVersion: appVersion,
+      available: available,
+      os: info.os,
       onDismiss: () async {
-        setState(() => _dismissedVersion = info.version);
-        await (await SharedPreferences.getInstance()).setString(_dismissKey, info.version);
+        setState(() => _dismissedVersion = key);
+        await (await SharedPreferences.getInstance()).setString(_dismissKey, key);
       },
-      onHowTo: () => showUpdateSheet(context, gap: gap, os: info.os),
+      // No Windows o caminho é o ícone do PC; o texto já diz.
+      onHowTo: available != null && info.os == 'windows'
+          ? null
+          : () => showUpdateSheet(context, gap: available != null ? VersionGap.agentOld : gap, os: info.os),
     );
   }
 

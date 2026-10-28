@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Atualização pelo app: abre o instalador do Android com o APK baixado.
+         O Android ainda pede para liberar e só aceita a mesma assinatura. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <!-- Só HTTPS (o agente usa TLS com pin), e nada de backup automático:
          as credenciais dos PCs não podem ir para a nuvem nem para outro aparelho. -->
     <application
@@ -74,6 +77,17 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Entrega o APK baixado ao instalador do Android, só da pasta
+             cache/updates e só durante a instalação. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

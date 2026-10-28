@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models/device.dart';
+import '../services/app_update.dart';
 import '../services/device_store.dart';
 import '../services/pc_events.dart';
 import '../services/pc_probe.dart';
@@ -13,6 +14,7 @@ import '../services/wake_tracker.dart';
 import '../services/widget_bridge.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
+import '../ui/update_notice.dart';
 import '../ui/wake_help.dart';
 import '../ui/widgets.dart';
 import 'device_form_screen.dart';
@@ -37,6 +39,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _poll;
   final _celebrated = <String>{}; // PCs cujo "ligou" já foi comemorado
   final _widget = WidgetBridge();
+  final _updater = AppUpdater();
+  AppRelease? _appUpdate;
+  double? _updateProgress; // 0 a 1 enquanto baixa
+  String? _updateError;
 
   @override
   void initState() {
@@ -44,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _wakes.addListener(_onWake);
     _load();
+    _checkAppUpdate();
   }
 
   @override
@@ -59,6 +66,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _start();
+      _checkAppUpdate(); // vai à rede no máximo uma vez por dia
     } else if (state == AppLifecycleState.paused) {
       _poll?.cancel();
       _events.dispose();
@@ -237,6 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 8),
               ],
             ),
+            if (_appUpdateCard() case final card?) SliverToBoxAdapter(child: card),
             if (_devices.isEmpty)
               SliverFillRemaining(hasScrollBody: false, child: _empty(context))
             else ...[
@@ -261,6 +270,64 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _checkAppUpdate() async {
+    if (!AppUpdater.supported) return;
+    final r = await _updater.check();
+    if (mounted) setState(() => _appUpdate = r);
+  }
+
+  Future<void> _installAppUpdate() async {
+    final r = _appUpdate;
+    if (r == null || _updateProgress != null) return;
+    setState(() {
+      _updateProgress = 0;
+      _updateError = null;
+    });
+    try {
+      var shown = 0;
+      final apk = await _updater.download(
+        r,
+        abis: await AppUpdater.abis(),
+        dir: await AppUpdater.downloadDir(),
+        onProgress: (got, total) {
+          final pct = total > 0 ? got * 100 ~/ total : 0;
+          if (pct != shown && mounted) setState(() => _updateProgress = (shown = pct) / 100);
+        },
+      );
+      if (!mounted) return;
+      setState(() => _updateProgress = null);
+      if (!await AppUpdater.install(apk) && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Libere "Instalar apps desta fonte" para o Velksync e toque em Atualizar de novo'),
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        setState(() {
+          _updateProgress = null;
+          _updateError = 'Não deu para atualizar: $e';
+        });
+      }
+    }
+  }
+
+  Widget? _appUpdateCard() {
+    final r = _appUpdate;
+    if (r == null) return null;
+    return AppUpdateCard(
+      release: r,
+      progress: _updateProgress,
+      error: _updateError,
+      onUpdate: _installAppUpdate,
+      onDismiss: () async {
+        setState(() => _appUpdate = null);
+        await _updater.dismiss(r.version);
+      },
     );
   }
 

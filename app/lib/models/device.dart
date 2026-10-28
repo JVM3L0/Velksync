@@ -103,6 +103,9 @@ class AgentInfo {
   /// Desligar/suspender agendado no PC, se houver.
   final PowerSchedule? schedule;
 
+  /// Versão nova do agente que ele mesmo achou no GitHub, se houver.
+  final String? update;
+
   bool has(String feature) => features.contains(feature);
 
   AgentInfo.fromJson(Map<String, dynamic> j)
@@ -113,7 +116,8 @@ class AgentInfo {
       allowShell = j['allow_shell'] as bool? ?? false,
       version = j['version'] as String? ?? '',
       features = {for (final f in j['features'] as List? ?? const []) f.toString()},
-      schedule = j['schedule'] is Map ? PowerSchedule.fromJson(j['schedule'] as Map<String, dynamic>) : null;
+      schedule = j['schedule'] is Map ? PowerSchedule.fromJson(j['schedule'] as Map<String, dynamic>) : null,
+      update = j['update'] is Map ? (j['update'] as Map)['version'] as String? : null;
 
   String get osLabel => osLabelOf(os);
 }

@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/app_update.dart';
 import '../services/versions.dart';
 import 'theme.dart';
 
@@ -12,7 +15,11 @@ class UpdateBanner extends StatelessWidget {
   final String agentVersion;
   final String appVersion;
   final VoidCallback onDismiss;
-  final VoidCallback onHowTo;
+  final VoidCallback? onHowTo;
+
+  /// Versão nova que o próprio agente achou (com app e agente em dia entre si).
+  final String? available;
+  final String os;
 
   const UpdateBanner({
     super.key,
@@ -21,6 +28,8 @@ class UpdateBanner extends StatelessWidget {
     required this.appVersion,
     required this.onDismiss,
     required this.onHowTo,
+    this.available,
+    this.os = '',
   });
 
   @override
@@ -30,6 +39,12 @@ class UpdateBanner extends StatelessWidget {
     final fg = scheme.onTertiaryContainer;
     final agent = agentVersion.isEmpty ? 'versão antiga' : agentVersion;
     final (title, body) = switch (gap) {
+      _ when available != null => (
+        'Agente $available disponível no PC',
+        os == 'windows'
+            ? 'Atualize pelo ícone do Velksync no PC, perto do relógio: Atualizar para $available.'
+            : 'O PC está na $agent. Atualize o agente para ter as novidades.',
+      ),
       VersionGap.appOld => (
         'App desatualizado ($appVersion)',
         'O agente do PC está na $agent. Atualize o app para ter tudo funcionando.',
@@ -74,7 +89,7 @@ class UpdateBanner extends StatelessWidget {
                 style: TextButton.styleFrom(foregroundColor: fg),
                 child: const Text('Agora não'),
               ),
-              FilledButton.tonal(onPressed: onHowTo, child: const Text('Como atualizar')),
+              if (onHowTo != null) FilledButton.tonal(onPressed: onHowTo, child: const Text('Como atualizar')),
             ],
           ),
         ],
@@ -197,6 +212,111 @@ class _Code extends StatelessWidget {
               ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text('Copiado')));
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Versão nova do app: no topo da lista de PCs. Baixando, mostra o progresso.
+class AppUpdateCard extends StatelessWidget {
+  final AppRelease release;
+
+  /// 0 a 1 enquanto baixa; null parado.
+  final double? progress;
+  final String? error;
+  final VoidCallback onDismiss;
+  final VoidCallback onUpdate;
+
+  const AppUpdateCard({
+    super.key,
+    required this.release,
+    required this.onDismiss,
+    required this.onUpdate,
+    this.progress,
+    this.error,
+  });
+
+  /// As primeiras novidades do CHANGELOG, sem os títulos das seções.
+  static String highlights(String notes) {
+    final items = [
+      for (final line in const LineSplitter().convert(notes))
+        if (line.trimLeft().startsWith('- ')) line.trimLeft().substring(2).trim(),
+    ];
+    return items.take(2).join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final fg = scheme.onPrimaryContainer;
+    final p = progress;
+    final news = highlights(release.notes);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+      decoration: BoxDecoration(color: scheme.primaryContainer, borderRadius: BorderRadius.circular(Radii.xl)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Symbols.system_update_rounded, color: fg, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Velksync ${release.version} disponível',
+                      style: text.titleMedium?.copyWith(color: fg, fontWeight: FontWeight.w600),
+                    ),
+                    if (news.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Novidades: $news',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodyMedium?.copyWith(color: fg),
+                      ),
+                    ],
+                    if (error case final e?) ...[
+                      const SizedBox(height: 4),
+                      Text(e, style: text.bodyMedium?.copyWith(color: scheme.error)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (p != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(36, 4, 8, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(value: p),
+                  const SizedBox(height: 6),
+                  Text('Baixando… ${(p * 100).round()}%', style: text.bodySmall?.copyWith(color: fg)),
+                ],
+              ),
+            )
+          else
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              children: [
+                TextButton(
+                  onPressed: onDismiss,
+                  style: TextButton.styleFrom(foregroundColor: fg),
+                  child: const Text('Agora não'),
+                ),
+                FilledButton(onPressed: onUpdate, child: Text(error == null ? 'Atualizar' : 'Tentar de novo')),
+              ],
+            ),
         ],
       ),
     );
