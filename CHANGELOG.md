@@ -3,6 +3,21 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.2] - 2026-10-28
+
+### Alterado
+- Temas Gruvbox e Catppuccin coloridos: cada função tem sua cor da paleta
+  (desligar vermelho, reiniciar amarelo, suspender azul, CPU azul, GPU
+  rosa, memória verde, disco amarelo). No escuro, blocos cheios com texto
+  escuro; no claro, fundo pastel com a cor no ícone e no texto.
+- Intensidade em Configurações → Tema: Vivo, Pastel ou Bem pastel. Padrão
+  Bem pastel no Catppuccin e no Gruvbox Suave, Vivo no Gruvbox Original.
+
+### Corrigido
+- A porcentagem de CPU e GPU e a barra de VRAM ficavam sobre a cor de
+  destaque; agora a forma é tingida da cor da métrica e o trilho é neutro.
+- Barras de progresso sem o ponto no fim do trilho.
+
 ## [0.6.1] - 2026-10-27
 
 ### Alterado
