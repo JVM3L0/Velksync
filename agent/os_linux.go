@@ -34,6 +34,9 @@ func notifyUser(string, bool) {}
 
 func defaultLogPath(string) string { return "" }
 
+// openURL abre um link http(s) já conferido no navegador da sessão.
+func openURL(link string) error { return exec.Command("xdg-open", link).Start() }
+
 // No Linux o QR já aparece no terminal.
 func openFile(string) bool { return false }
 

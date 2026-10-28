@@ -66,6 +66,11 @@ func attachConsole() {
 	}
 }
 
+// openURL abre um link http(s) já conferido no navegador padrão.
+func openURL(link string) error {
+	return hidden(exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", link)).Start()
+}
+
 // allowForeground deixa o agente trazer a janela do QR para a frente: sem
 // isso o Windows só pisca o ícone na barra de tarefas.
 func allowForeground() {

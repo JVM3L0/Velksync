@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -61,4 +64,53 @@ func TestHubPublishTo(t *testing.T) {
 	if n := h.PublishTo("galaxy", Event{Type: "notify"}); n != 0 {
 		t.Error("entregou a quem saiu")
 	}
+}
+
+func TestInbox(t *testing.T) {
+	var opened, copied []string
+	openLink = func(u string) error { opened = append(opened, u); return nil }
+	copyText = func(s string) error { copied = append(copied, s); return nil }
+	t.Cleanup(func() { openLink, copyText = openURL, writeClipboard })
+
+	s := &Server{cfg: Config{Token: testMaster, Devices: []PairedDevice{{ID: "dev1", Name: "Pixel 9"}}}, hub: NewHub()}
+	s.routes()
+	post := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		s.inbox(rec, withAuth(httptest.NewRequest("POST", "/api/inbox", strings.NewReader(body)), authDevice, "dev1"))
+		return rec
+	}
+
+	if rec := post(`{"text":" https://youtu.be/x "}`); rec.Code != 200 || !strings.Contains(rec.Body.String(), "opened") {
+		t.Fatalf("link: %d %s", rec.Code, rec.Body)
+	}
+	if len(opened) != 1 || opened[0] != "https://youtu.be/x" {
+		t.Errorf("abriu %v", opened)
+	}
+	// Qualquer coisa que não seja http(s) vira texto copiado, nunca é aberta.
+	for _, txt := range []string{"Rua das Flores, 12", "file:///C:/Windows/win.ini", "javascript:alert(1)", "cmd /c calc"} {
+		if rec := post(`{"text":` + jsonString(txt) + `}`); rec.Code != 200 || !strings.Contains(rec.Body.String(), "copied") {
+			t.Errorf("%q: %d %s", txt, rec.Code, rec.Body)
+		}
+	}
+	if len(opened) != 1 || len(copied) != 4 {
+		t.Errorf("abertos %v, copiados %v", opened, copied)
+	}
+	if rec := post(`{"text":"  "}`); rec.Code != 400 {
+		t.Errorf("vazio: %d", rec.Code)
+	}
+	if rec := post(`{"text":"` + strings.Repeat("a", maxSendText+1) + `"}`); rec.Code != 413 {
+		t.Errorf("grande demais: %d", rec.Code)
+	}
+	copyText = func(string) error { return errors.New("sem área de transferência") }
+	if rec := post(`{"text":"oi"}`); rec.Code != 501 {
+		t.Errorf("sem área de transferência: %d", rec.Code)
+	}
+	if h := s.history.List(10, false); len(h) != 5 || h[0].Kind != histReceive {
+		t.Errorf("histórico: %+v", h)
+	}
+}
+
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

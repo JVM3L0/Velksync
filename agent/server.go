@@ -71,6 +71,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/devices/revoke", masterOnly(s.revokeDevice))
 	mux.HandleFunc("GET /api/info", s.info)
 	mux.HandleFunc("GET /api/history", s.historyList)
+	mux.HandleFunc("POST /api/inbox", s.inbox)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/presence", s.presenceKey)
 	mux.HandleFunc("GET /api/media", s.mediaState)
@@ -154,7 +155,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"mac":         macFor(addrIP(local), false),
 		"allow_shell": s.cfg.AllowShell,
 		// O app usa o que existir aqui e cai no comportamento antigo no resto.
-		"features": []string{"live", "presence", "schedule", "history"},
+		"features": []string{"live", "presence", "schedule", "history", "inbox"},
 		"schedule": s.schedule.Current(),
 		"update":   s.updateInfo(),
 	})
