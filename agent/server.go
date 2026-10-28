@@ -30,6 +30,7 @@ type Server struct {
 	ui         desktop
 	updates    *updater
 	history    *History
+	procs      *processWatch
 	notices    *noticeBatcher
 	mu         sync.Mutex // protege cfg.Devices, cfg.Revoked e cfg.TrayNotices
 }
@@ -49,6 +50,9 @@ func (s *Server) routes() http.Handler {
 	}
 	if s.history == nil {
 		s.history = newHistory(s.configPath)
+	}
+	if s.procs == nil {
+		s.procs = newProcessWatch()
 	}
 	if s.notices == nil {
 		s.notices = newNoticeBatcher(func(title, text string) { s.ui.Notify(title, text) })
@@ -72,6 +76,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/info", s.info)
 	mux.HandleFunc("GET /api/history", s.historyList)
 	mux.HandleFunc("POST /api/inbox", s.inbox)
+	mux.HandleFunc("GET /api/processes", s.processes)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/presence", s.presenceKey)
 	mux.HandleFunc("GET /api/media", s.mediaState)
@@ -155,7 +160,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"mac":         macFor(addrIP(local), false),
 		"allow_shell": s.cfg.AllowShell,
 		// O app usa o que existir aqui e cai no comportamento antigo no resto.
-		"features": []string{"live", "presence", "schedule", "history", "inbox"},
+		"features": []string{"live", "presence", "schedule", "history", "inbox", "processes"},
 		"schedule": s.schedule.Current(),
 		"update":   s.updateInfo(),
 	})
