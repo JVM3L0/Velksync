@@ -18,6 +18,7 @@ enum ThemeFamily {
 class AppSettings extends ChangeNotifier {
   static const _familyKey = 'theme_family', _modeKey = 'theme_mode';
   static const _gruvboxKey = 'theme_gruvbox', _catppuccinKey = 'theme_catppuccin';
+  static const _gruvboxAccentKey = 'theme_gruvbox_accent', _catppuccinAccentKey = 'theme_catppuccin_accent';
 
   ThemeFamily family = ThemeFamily.dynamic;
   ThemeMode mode = ThemeMode.system;
@@ -25,13 +26,40 @@ class AppSettings extends ChangeNotifier {
   GruvboxVariant gruvbox = GruvboxVariant.soft;
   CatppuccinFlavor catppuccin = CatppuccinFlavor.frappe;
 
+  /// Destaque escolhido (id de [Palettes.gruvboxAccents] ou [Palettes.catppuccinAccents]);
+  /// null usa o padrão (laranja no Gruvbox, verde no Suave, mauve no Catppuccin).
+  String? gruvboxAccent, catppuccinAccent;
+
   /// Paletas (clara, escura) da família escolhida; null no tema dinâmico.
   (Palette, Palette)? get palettes => switch (family) {
     ThemeFamily.dynamic => null,
     ThemeFamily.velksync => Palettes.velksync,
-    ThemeFamily.gruvbox => Palettes.gruvbox(gruvbox),
-    ThemeFamily.catppuccin => Palettes.catppuccin(catppuccin),
+    ThemeFamily.gruvbox => Palettes.gruvbox(gruvbox, gruvboxAccent),
+    ThemeFamily.catppuccin => Palettes.catppuccin(catppuccin, catppuccinAccent),
   };
+
+  /// Destaques da família atual, para o seletor (vazio sem seletor).
+  List<Accent> get accentOptions => switch (family) {
+    ThemeFamily.gruvbox => Palettes.gruvboxAccents,
+    ThemeFamily.catppuccin => Palettes.catppuccinAccents,
+    _ => const [],
+  };
+
+  Future<void> setAccent(String id) async {
+    final key = switch (family) {
+      ThemeFamily.gruvbox => _gruvboxAccentKey,
+      ThemeFamily.catppuccin => _catppuccinAccentKey,
+      _ => null,
+    };
+    if (key == null) return;
+    if (family == ThemeFamily.gruvbox) {
+      gruvboxAccent = id;
+    } else {
+      catppuccinAccent = id;
+    }
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setString(key, id);
+  }
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -39,6 +67,8 @@ class AppSettings extends ChangeNotifier {
     mode = ThemeMode.values.asNameMap()[prefs.getString(_modeKey)] ?? ThemeMode.system;
     gruvbox = GruvboxVariant.values.asNameMap()[prefs.getString(_gruvboxKey)] ?? GruvboxVariant.soft;
     catppuccin = CatppuccinFlavor.values.asNameMap()[prefs.getString(_catppuccinKey)] ?? CatppuccinFlavor.frappe;
+    gruvboxAccent = prefs.getString(_gruvboxAccentKey);
+    catppuccinAccent = prefs.getString(_catppuccinAccentKey);
     notifyListeners();
   }
 

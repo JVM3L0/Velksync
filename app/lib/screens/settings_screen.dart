@@ -32,8 +32,10 @@ class SettingsScreen extends StatelessWidget {
             List<Color> swatches(ThemeFamily f) => switch (f) {
               ThemeFamily.dynamic => [wall.surface, wall.primary, wall.secondary, wall.tertiary, wall.error],
               ThemeFamily.velksync => pick(Palettes.velksync).swatches,
-              ThemeFamily.gruvbox => pick(Palettes.gruvbox(settings.gruvbox)).swatches,
-              ThemeFamily.catppuccin => pick(Palettes.catppuccin(settings.catppuccin)).swatches,
+              ThemeFamily.gruvbox => pick(Palettes.gruvbox(settings.gruvbox, settings.gruvboxAccent)).swatches,
+              ThemeFamily.catppuccin => pick(
+                Palettes.catppuccin(settings.catppuccin, settings.catppuccinAccent),
+              ).swatches,
             };
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
@@ -81,6 +83,19 @@ class SettingsScreen extends StatelessWidget {
                       ),
                     ),
                     ThemeFamily.dynamic || ThemeFamily.velksync => const SizedBox(width: double.infinity),
+                  },
+                ),
+                AnimatedSize(
+                  duration: Motion.spatialDuration,
+                  curve: Motion.effects,
+                  alignment: Alignment.topCenter,
+                  child: switch (settings.palettes) {
+                    final p? when settings.accentOptions.isNotEmpty => _AccentPicker(
+                      options: settings.accentOptions,
+                      palette: pick(p),
+                      onSelected: settings.setAccent,
+                    ),
+                    _ => const SizedBox(width: double.infinity),
                   },
                 ),
                 const SectionLabel('Modo'),
@@ -255,6 +270,68 @@ class _TilePickerState extends State<_TilePicker> {
           child: Text(
             'Adicione o bloco puxando as Configurações rápidas e tocando no lápis. Ele só liga o PC; '
             'desligar e comandos continuam só dentro do app.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Bolinhas nas cores de destaque da paleta; a escolhida tem um visto.
+class _AccentPicker extends StatelessWidget {
+  final List<Accent> options;
+  final Palette palette; // a do modo atual: as bolinhas mostram as cores que vão aparecer
+  final ValueChanged<String> onSelected;
+  const _AccentPicker({required this.options, required this.palette, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionLabel('Destaque'),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final a in options)
+              if (palette.accents[a.id] case final color?)
+                Semantics(
+                  button: true,
+                  selected: palette.accent == a.id,
+                  label: 'Destaque ${a.label}',
+                  child: Tooltip(
+                    message: a.label,
+                    child: InkResponse(
+                      onTap: () => onSelected(a.id),
+                      radius: 26,
+                      child: AnimatedContainer(
+                        duration: Motion.effectsDuration,
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: palette.accent == a.id ? scheme.onSurface : Colors.transparent,
+                            width: 2.5,
+                          ),
+                        ),
+                        child: palette.accent == a.id
+                            ? Icon(Symbols.check_rounded, size: 22, weight: 700, color: readable(palette.lowest, color))
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Text(
+            'A cor dos botões e dos destaques, nos modos claro e escuro.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
           ),
         ),
