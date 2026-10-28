@@ -14,6 +14,7 @@ import '../ui/media_panel.dart';
 import '../ui/perf.dart';
 import '../ui/schedule.dart';
 import '../ui/stats_chart.dart';
+import '../ui/history.dart';
 import '../ui/role_colors.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
@@ -42,6 +43,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
   String? _awaitingLoginOs; // só o sinal de presença respondeu
   final _wakes = WakeTracker.instance;
   List<PresetCommand> _commands = [];
+  List<HistoryEntry>? _activity; // null: agente sem histórico (anterior à 0.7)
   String? _running;
   PcStats? _stats;
   late final _history = StatsHistory.of(widget.device.id); // para o gráfico já abrir preenchido
@@ -103,6 +105,14 @@ class _DeviceScreenState extends State<DeviceScreen> {
   Future<void> _refresh() async {
     final state = await probePc(widget.device);
     var commands = _commands;
+    var activity = _activity;
+    if (state.info?.has('history') ?? false) {
+      try {
+        activity = await _client.history();
+      } on AgentException {
+        // Mantém o que já tinha: o cartão não some por uma falha de rede.
+      }
+    }
     if (state.info != null && _info == null) {
       try {
         commands = await _client.commands();
@@ -115,6 +125,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
       _info = state.info;
       _awaitingLoginOs = state.power == PcPower.awaitingLogin ? state.os : null;
       _commands = state.info == null ? [] : commands;
+      _activity = state.info?.has('history') ?? false ? activity : null;
       _checked = true;
     });
     _syncLiveStats();
@@ -328,6 +339,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
             alignment: Alignment.topCenter,
             child: online ? _commandsSection() : const SizedBox(width: double.infinity),
           ),
+          if (online && _activity != null) RecentActivity(entries: _activity!),
         ],
       ),
     );

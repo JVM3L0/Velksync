@@ -35,6 +35,13 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Menu Compartilhar: só texto (links incluídos). O app pergunta
+                 para qual PC antes de enviar qualquer coisa. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
         </activity>
         <!-- Bloco "Ligar PC" das Configurações rápidas: só manda o Wake-on-LAN.
              A permissão garante que só o sistema pode se ligar a ele. -->

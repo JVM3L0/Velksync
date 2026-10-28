@@ -104,12 +104,14 @@ class AppUpdater {
   static bool get supported => kReleaseMode && Platform.isAndroid;
 
   /// Versão nova ainda não dispensada; null sem novidade ou com a checagem desligada.
-  Future<AppRelease?> check() async {
+  /// [force] é o "Procurar agora": consulta na hora (mesmo desligada ou já
+  /// feita hoje), avisa se não conseguiu e traz de volta uma versão dispensada.
+  Future<AppRelease?> check({bool force = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    if (!(prefs.getBool(enabledKey) ?? true) || current.isEmpty) return null;
+    if (current.isEmpty || (!force && !(prefs.getBool(enabledKey) ?? true))) return null;
     var release = _cached(prefs);
     final checked = DateTime.fromMillisecondsSinceEpoch(prefs.getInt(_checkedKey) ?? 0);
-    if (_now().difference(checked) >= const Duration(days: 1)) {
+    if (force || _now().difference(checked) >= const Duration(days: 1)) {
       try {
         final res = await _http
             .get(Uri.parse(_api), headers: {'Accept': 'application/vnd.github+json'})
@@ -121,13 +123,21 @@ class AppUpdater {
             await prefs.setString(_releaseKey, jsonEncode(release.toJson()));
           }
           await prefs.setInt(_checkedKey, _now().millisecondsSinceEpoch);
+        } else if (force) {
+          throw UpdateException('O GitHub respondeu ${res.statusCode}');
         }
+      } on UpdateException {
+        rethrow;
       } on Exception {
-        // Sem internet: tenta na próxima vez que abrir.
+        // Sem internet: tenta na próxima vez que abrir (ou avisa, no manual).
+        if (force) throw UpdateException('Sem conexão com o GitHub');
       }
     }
     if (release == null || !isNewerVersion(release.version, current)) return null;
-    if (prefs.getString(_dismissedKey) == release.version) return null;
+    if (prefs.getString(_dismissedKey) == release.version) {
+      if (!force) return null;
+      await prefs.remove(_dismissedKey);
+    }
     return release;
   }
 

@@ -5,14 +5,17 @@ import 'package:material_ui/material_ui.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models/device.dart';
+import '../services/agent_client.dart';
 import '../services/app_update.dart';
 import '../services/device_store.dart';
 import '../services/pc_events.dart';
 import '../services/pc_probe.dart';
 import '../services/settings.dart';
+import '../services/share_bridge.dart';
 import '../services/wake_tracker.dart';
 import '../services/widget_bridge.dart';
 import '../ui/theme.dart';
+import '../ui/send_sheet.dart';
 import '../ui/transitions.dart';
 import '../ui/update_notice.dart';
 import '../ui/wake_help.dart';
@@ -51,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _wakes.addListener(_onWake);
     _load();
     _checkAppUpdate();
+    ShareBridge.onShared(_sendShared);
   }
 
   @override
@@ -104,6 +108,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Toque no widget: abre direto a tela daquele PC.
     WidgetBridge.onOpen(_openFromWidget);
     if (await WidgetBridge.takeLaunch() case final launch?) _openFromWidget(launch);
+    // Aberto pelo menu Compartilhar: espera saber quais PCs estão ligados.
+    if (await ShareBridge.take() case final text?) {
+      await _refresh();
+      await _sendShared(text);
+    }
   }
 
   /// Abre a tela do PC tocado no widget; o botão de desligar abre já
@@ -271,6 +280,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  /// Texto do menu Compartilhar: escolhe o PC e manda.
+  Future<void> _sendShared(String text) async {
+    if (!mounted) return;
+    final d = await showSendSheet(
+      context,
+      text: text,
+      devices: _devices,
+      online: (d) => _status[d.id]?.power == PcPower.online,
+    );
+    if (d == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final opened = await AgentClient(d).sendText(text);
+      messenger.showSnackBar(
+        SnackBar(content: Text(opened ? 'Link aberto no ${d.name}' : 'Texto copiado no ${d.name}')),
+      );
+    } on AgentException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _checkAppUpdate() async {

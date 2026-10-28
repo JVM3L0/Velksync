@@ -192,4 +192,29 @@ void main() {
     expect(find.textContaining('ícone do Velksync no PC'), findsOneWidget);
     expect(find.text('Como atualizar'), findsNothing);
   });
+
+  test('"Procurar agora" ignora o intervalo e o interruptor, avisa sem rede e traz a versão dispensada', () async {
+    var calls = 0;
+    final u = AppUpdater(
+      client: MockClient((_) async {
+        calls++;
+        return http.Response(jsonEncode(_release()), 200);
+      }),
+      current: '0.5.0',
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppUpdater.enabledKey, false);
+    expect(await u.check(), isNull, reason: 'automático desligado');
+    expect((await u.check(force: true))?.version, '0.6.0');
+    expect((await u.check(force: true))?.version, '0.6.0');
+    expect(calls, 2, reason: 'o manual consulta toda vez');
+    await u.dismiss('0.6.0');
+    expect((await u.check(force: true))?.version, '0.6.0', reason: 'manual mostra mesmo dispensada');
+
+    final offline = AppUpdater(
+      client: MockClient((_) async => throw const SocketException('sem rede')),
+      current: '0.5.0',
+    );
+    await expectLater(offline.check(force: true), throwsA(isA<UpdateException>()));
+  });
 }

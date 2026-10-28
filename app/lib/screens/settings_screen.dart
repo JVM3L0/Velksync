@@ -8,6 +8,7 @@ import '../services/app_update.dart';
 import '../services/device_store.dart';
 
 import '../services/settings.dart';
+import '../services/versions.dart';
 import '../ui/palettes.dart';
 import '../ui/theme.dart';
 import '../ui/widgets.dart';
@@ -400,6 +401,25 @@ class _UpdateCheckTileState extends State<_UpdateCheckTile> {
     });
   }
 
+  bool _checking = false;
+
+  Future<void> _checkNow() async {
+    setState(() => _checking = true);
+    final messenger = ScaffoldMessenger.of(context);
+    String msg;
+    try {
+      final r = await AppUpdater().check(force: true);
+      msg = r == null
+          ? 'Você está na versão mais recente ($appVersion)'
+          : 'Velksync ${r.version} disponível: o cartão para atualizar está na tela inicial';
+    } on UpdateException catch (e) {
+      msg = 'Não deu para procurar: $e';
+    }
+    if (!mounted) return;
+    setState(() => _checking = false);
+    messenger.showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   @override
   Widget build(BuildContext context) => ExpressiveGroup(
     children: [
@@ -411,6 +431,17 @@ class _UpdateCheckTileState extends State<_UpdateCheckTile> {
           setState(() => _on = v);
           await (await SharedPreferences.getInstance()).setBool(AppUpdater.enabledKey, v);
         },
+      ),
+      ListTile(
+        title: const Text('Procurar agora'),
+        subtitle: Text(
+          AppUpdater.supported ? 'Versão instalada: $appVersion' : 'Só no app oficial (este é o de desenvolvimento)',
+        ),
+        enabled: AppUpdater.supported && !_checking,
+        trailing: _checking
+            ? const SizedBox.square(dimension: 24, child: CircularProgressIndicator(strokeWidth: 2.5))
+            : const Icon(Symbols.refresh_rounded),
+        onTap: _checkNow,
       ),
     ],
   );

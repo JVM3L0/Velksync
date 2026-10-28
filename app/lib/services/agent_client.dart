@@ -139,6 +139,22 @@ class AgentClient {
     for (final c in await _send('GET', '/api/commands') as List) PresetCommand.fromJson(c as Map<String, dynamic>),
   ];
 
+  /// Últimas ações no PC, da mais nova para a mais antiga.
+  Future<List<HistoryEntry>> history() async {
+    final data = await _send('GET', '/api/history');
+    return [
+      for (final e in (data is Map ? data['entries'] : null) as List? ?? const [])
+        if (e is Map<String, dynamic>) HistoryEntry.fromJson(e),
+    ];
+  }
+
+  /// Texto do celular para o PC: link abre no navegador dele, outro texto
+  /// vai para a área de transferência. Devolve true se abriu um link.
+  Future<bool> sendText(String text) async {
+    final data = await _send('POST', '/api/inbox', body: {'text': text});
+    return data is Map && data['result'] == 'opened';
+  }
+
   Future<RunResult> run(String id) async => RunResult.fromJson(
     await _send('POST', '/api/commands/${Uri.encodeComponent(id)}', timeout: const Duration(minutes: 2))
         as Map<String, dynamic>,
@@ -221,4 +237,27 @@ class AgentClient {
   }
 
   void close() => _http.close();
+}
+
+/// Uma ação registrada pelo agente (GET /api/history).
+class HistoryEntry {
+  final DateTime at;
+  final String device, kind, text;
+  final bool failed;
+
+  const HistoryEntry({
+    required this.at,
+    required this.device,
+    required this.kind,
+    required this.text,
+    this.failed = false,
+  });
+
+  factory HistoryEntry.fromJson(Map<String, dynamic> j) => HistoryEntry(
+    at: DateTime.fromMillisecondsSinceEpoch((j['at'] as num?)?.toInt() ?? 0),
+    device: j['device'] as String? ?? '',
+    kind: j['kind'] as String? ?? '',
+    text: j['text'] as String? ?? '',
+    failed: j['failed'] as bool? ?? false,
+  );
 }
