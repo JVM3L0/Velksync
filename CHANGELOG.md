@@ -3,9 +3,18 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.6.0] - 2026-10-27
 
 ### Adicionado
+- Atualização do agente: uma vez por dia ele procura versão nova no GitHub
+  e avisa pelo ícone; **Atualizar para X…** baixa o instalador e só o roda
+  se o `SHA256SUMS` estiver assinado pela chave das releases (Ed25519).
+  Desligável no menu do ícone (`update_check`).
+- Atualização do app: cartão no topo da lista de PCs, download do APK do
+  processador do celular conferido com o `SHA256SUMS` e instalador do
+  Android. Desligável em Configurações → Atualizações.
+- O app avisa quando o agente achou versão nova.
+- Releases publicam `SHA256SUMS.sig` e usam o CHANGELOG como novidades.
 - Capa em alta (1200 px) com o Pear Desktop: o agente usa a API do plugin
   API Server, com o acesso permitido no próprio Pear na primeira vez.
 
