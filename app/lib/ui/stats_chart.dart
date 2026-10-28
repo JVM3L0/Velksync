@@ -79,7 +79,12 @@ class _StatsSheetState extends State<StatsSheet> {
             ProcessesSection(
               load: widget.processes!,
               showTitle: false,
-              initialSort: _metric == Metric.mem ? ProcessSort.mem : ProcessSort.cpu,
+              initialSort: switch (_metric) {
+                Metric.cpu => ProcessSort.cpu,
+                Metric.gpu => ProcessSort.gpu,
+                Metric.vram => ProcessSort.vram,
+                Metric.mem => ProcessSort.mem,
+              },
             ),
           ],
         ),

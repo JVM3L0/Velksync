@@ -273,27 +273,40 @@ class ProcessInfo {
   final int count;
   final double cpu; // % do total do PC
   final int mem; // bytes
+  final double gpu; // % da GPU
+  final int vram; // bytes
 
-  const ProcessInfo({required this.name, this.count = 1, this.cpu = 0, this.mem = 0});
+  const ProcessInfo({required this.name, this.count = 1, this.cpu = 0, this.mem = 0, this.gpu = 0, this.vram = 0});
 
   factory ProcessInfo.fromJson(Map<String, dynamic> j) => ProcessInfo(
     name: j['name'] as String? ?? '',
     count: (j['count'] as num?)?.toInt() ?? 1,
     cpu: (j['cpu'] as num?)?.toDouble() ?? 0,
     mem: (j['mem'] as num?)?.toInt() ?? 0,
+    gpu: (j['gpu'] as num?)?.toDouble() ?? 0,
+    vram: (j['vram'] as num?)?.toInt() ?? 0,
   );
 }
 
 class ProcessList {
   final List<ProcessInfo> byCpu, byMem;
+
+  /// Null quando o PC não informa GPU por processo (Linux, agente antigo).
+  final List<ProcessInfo>? byGpu, byVram;
   final int total;
-  const ProcessList({this.byCpu = const [], this.byMem = const [], this.total = 0});
+  const ProcessList({this.byCpu = const [], this.byMem = const [], this.byGpu, this.byVram, this.total = 0});
 
   factory ProcessList.fromJson(Map<String, dynamic> j) {
     List<ProcessInfo> list(Object? v) => [
       for (final e in v as List? ?? const [])
         if (e is Map<String, dynamic>) ProcessInfo.fromJson(e),
     ];
-    return ProcessList(byCpu: list(j['by_cpu']), byMem: list(j['by_mem']), total: (j['total'] as num?)?.toInt() ?? 0);
+    return ProcessList(
+      byCpu: list(j['by_cpu']),
+      byMem: list(j['by_mem']),
+      byGpu: j['by_gpu'] is List ? list(j['by_gpu']) : null,
+      byVram: j['by_vram'] is List ? list(j['by_vram']) : null,
+      total: (j['total'] as num?)?.toInt() ?? 0,
+    );
   }
 }

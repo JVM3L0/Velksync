@@ -18,7 +18,16 @@ void main() {
     });
     expect((l.byCpu.single.name, l.byCpu.single.count, l.total), ('chrome.exe', 24, 231));
     expect(l.byMem.single.count, 1);
+    expect(l.byGpu, isNull, reason: 'sem by_gpu: o PC não informa GPU por processo');
     expect(ProcessList.fromJson({}).byCpu, isEmpty);
+    final g = ProcessList.fromJson({
+      'by_gpu': [
+        {'name': 'game.exe', 'gpu': 70.5, 'vram': 3221225472},
+      ],
+      'by_vram': <Object>[],
+    });
+    expect((g.byGpu!.single.gpu, g.byGpu!.single.vram), (70.5, 3221225472));
+    expect(g.byVram, isEmpty);
   });
 
   testWidgets('mostra por CPU, troca para memória e para de consultar ao sair', (tester) async {
@@ -115,5 +124,50 @@ void main() {
       ),
     );
     expect(find.text('Processos'), findsNothing);
+  });
+
+  testWidgets('filtros GPU e VRAM embaixo só quando o PC informa', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    Future<ProcessList> withGpu() async => const ProcessList(
+      byCpu: [ProcessInfo(name: 'chrome.exe', cpu: 18)],
+      byMem: [ProcessInfo(name: 'Code.exe', mem: 900)],
+      byGpu: [ProcessInfo(name: 'game.exe', gpu: 70, vram: 3 << 30)],
+      byVram: [ProcessInfo(name: 'game.exe', gpu: 70, vram: 3 << 30)],
+      total: 3,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ProcessesSection(load: withGpu, initialSort: ProcessSort.gpu),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    for (final f in ['CPU', 'GPU', 'VRAM', 'Memória']) {
+      expect(find.widgetWithText(ChoiceChip, f), findsOneWidget, reason: f);
+    }
+    expect(find.text('70%'), findsOneWidget, reason: 'aberto pela GPU: ordena pela GPU');
+    expect(find.text('3.0 GB'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'CPU'));
+    await tester.pump();
+    expect(find.textContaining('chrome.exe'), findsOneWidget);
+
+    Future<ProcessList> noGpu() async => const ProcessList(byCpu: [ProcessInfo(name: 'bash', cpu: 1)], total: 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: ProcessesSection(key: const ValueKey('sem-gpu'), load: noGpu, initialSort: ProcessSort.gpu),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.widgetWithText(ChoiceChip, 'GPU'), findsNothing);
+    expect(find.textContaining('bash'), findsOneWidget, reason: 'sem GPU, volta para CPU');
   });
 }

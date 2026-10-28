@@ -8,16 +8,25 @@ import 'role_colors.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
-enum ProcessSort { cpu, mem }
+enum ProcessSort {
+  cpu('CPU'),
+  gpu('GPU'),
+  vram('VRAM'),
+  mem('Memória');
 
-/// Seção "Processos" da aba Desempenho: os 10 que mais usam CPU ou memória.
-/// Só existe com a aba aberta, e só então o PC é consultado (a cada 3 s).
+  final String label;
+  const ProcessSort(this.label);
+}
+
+/// Os 10 programas que mais usam CPU, GPU, VRAM ou memória, com os filtros
+/// embaixo (como os do gráfico). Só consulta o PC enquanto está à mostra,
+/// a cada [every].
 class ProcessesSection extends StatefulWidget {
   final Future<ProcessList> Function() load;
   final Duration every;
   final ProcessSort initialSort;
 
-  /// Com título "Processos" (seção solta) ou só a ordenação (dentro da janela do gráfico).
+  /// Com o título "Processos" (seção solta) ou sem (dentro da janela do gráfico).
   final bool showTitle;
   const ProcessesSection({
     super.key,
@@ -64,34 +73,52 @@ class _ProcessesSectionState extends State<ProcessesSection> {
     }
   }
 
+  static List<ProcessSort> _available(ProcessList l) => [
+    ProcessSort.cpu,
+    if (l.byGpu != null) ProcessSort.gpu,
+    if (l.byVram != null) ProcessSort.vram,
+    ProcessSort.mem,
+  ];
+
+  static List<ProcessInfo> _items(ProcessList l, ProcessSort s) => switch (s) {
+    ProcessSort.cpu => l.byCpu,
+    ProcessSort.gpu => l.byGpu ?? l.byCpu,
+    ProcessSort.vram => l.byVram ?? l.byMem,
+    ProcessSort.mem => l.byMem,
+  };
+
+  static String _pct(double v) => '${v < 10 ? v.toStringAsFixed(1) : v.round()}%';
+
+  /// Abaixo de 1 GB em MB: um programa costuma usar centenas de MB.
+  static String _size(int bytes) => bytes >= 1 << 30 ? formatBytes(bytes) : '${(bytes / (1 << 20)).round()} MB';
+
+  /// O valor do filtro (em destaque) e um vizinho de contexto: CPU com
+  /// memória, GPU com VRAM.
+  static (String, String) _values(ProcessInfo p, ProcessSort s) => switch (s) {
+    ProcessSort.cpu => (_pct(p.cpu), _size(p.mem)),
+    ProcessSort.mem => (_size(p.mem), _pct(p.cpu)),
+    ProcessSort.gpu => (_pct(p.gpu), _size(p.vram)),
+    ProcessSort.vram => (_size(p.vram), _pct(p.gpu)),
+  };
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
     final roles = RoleColors.of(context);
     final list = _list;
-    final sortButton = SegmentedButton<ProcessSort>(
-      showSelectedIcon: false,
-      style: const ButtonStyle(visualDensity: VisualDensity.compact),
-      segments: const [
-        ButtonSegment(value: ProcessSort.cpu, label: Text('CPU')),
-        ButtonSegment(value: ProcessSort.mem, label: Text('Memória')),
-      ],
-      selected: {_sort},
-      onSelectionChanged: (s) => setState(() => _sort = s.first),
-    );
-    final items = list == null ? const <ProcessInfo>[] : (_sort == ProcessSort.cpu ? list.byCpu : list.byMem);
+    final sorts = list == null ? const <ProcessSort>[] : _available(list);
+    // Filtro escolhido que este PC não informa (ex.: GPU no Linux): volta à CPU.
+    final sort = sorts.contains(_sort) ? _sort : ProcessSort.cpu;
+    final accent = switch (sort) {
+      ProcessSort.cpu => roles.cpu,
+      ProcessSort.gpu || ProcessSort.vram => roles.gpu,
+      ProcessSort.mem => roles.mem,
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.showTitle)
-          SectionLabel('Processos', action: sortButton)
-        else
-          // Na janela do gráfico: o seletor na largura toda (cabe em tela estreita).
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: SizedBox(width: double.infinity, child: sortButton),
-          ),
+        if (widget.showTitle) const SectionLabel('Processos'),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(color: scheme.surfaceContainer, borderRadius: BorderRadius.circular(Radii.xl)),
@@ -104,9 +131,9 @@ class _ProcessesSectionState extends State<ProcessesSection> {
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text('Não deu para ler os processos: $e', style: text.bodyMedium),
             ),
-            _ => Column(
+            (final l?, _) => Column(
               children: [
-                for (final p in items)
+                for (final p in _items(l, sort))
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 7),
                     child: Row(
@@ -129,44 +156,51 @@ class _ProcessesSectionState extends State<ProcessesSection> {
                           ),
                         ),
                         SizedBox(
-                          width: 56,
+                          width: 76,
                           child: Text(
-                            '${p.cpu < 10 ? p.cpu.toStringAsFixed(1) : p.cpu.round()}%',
+                            _values(p, sort).$1,
                             textAlign: TextAlign.end,
                             style: text.bodyMedium?.copyWith(
                               fontFeatures: tabular,
-                              color: _sort == ProcessSort.cpu ? roles.cpu : scheme.onSurfaceVariant,
-                              fontWeight: _sort == ProcessSort.cpu ? FontWeight.w600 : null,
+                              color: accent,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                         SizedBox(
                           width: 76,
                           child: Text(
-                            formatBytes(p.mem),
+                            _values(p, sort).$2,
                             textAlign: TextAlign.end,
-                            style: text.bodyMedium?.copyWith(
-                              fontFeatures: tabular,
-                              color: _sort == ProcessSort.mem ? roles.mem : scheme.onSurfaceVariant,
-                              fontWeight: _sort == ProcessSort.mem ? FontWeight.w600 : null,
-                            ),
+                            style: text.bodyMedium?.copyWith(fontFeatures: tabular, color: scheme.onSurfaceVariant),
                           ),
                         ),
                       ],
                     ),
                   ),
-                if (list != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4, bottom: 4),
-                    child: Text(
-                      '${list.total} processos no PC · só leitura',
-                      style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: Text(
+                    '${l.total} processos no PC · só leitura',
+                    style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
                   ),
+                ),
               ],
             ),
           },
         ),
+        if (sorts.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              for (final s in sorts)
+                ChoiceChip(label: Text(s.label), selected: s == sort, onSelected: (_) => setState(() => _sort = s)),
+            ],
+          ),
+        ],
       ],
     );
   }
