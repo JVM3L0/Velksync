@@ -122,9 +122,15 @@ Reinicie o agente depois de editar a config.
 - `devices` / `revoked`: mantidos pelo agente (celulares pareados e revogados). Não edite à mão.
 - Logs: `journalctl --user -u velksync-agent -f` no Linux; `agent.log` ao lado da config no Windows.
 
-## 3. PC → celular
+## 3. PC ↔ celular
 
-Com o app aberto, o PC pode mandar:
+**Do PC para o celular, pelo ícone:** copie um texto ou link no PC e use **Enviar para o celular** no menu do ícone, escolhendo um dos celulares com o app aberto. Um link abre no navegador do celular; outro texto vai para a área de transferência dele (até 64 KB).
+
+**Do celular para o PC:** em qualquer app, **Compartilhar → Velksync** com um texto ou link e escolha o PC (só os ligados). Um link `http(s)` abre no navegador do PC; outro texto vai para a área de transferência dele, com aviso no ícone. Só texto: nada é executado, e `file:`, `javascript:` e afins chegam como texto. No Linux, por enquanto, só links.
+
+Tudo que vai e vem fica no **histórico** (abaixo), sem o conteúdo.
+
+Pela linha de comando, com o app aberto, o PC também pode mandar:
 
 ```sh
 velksync-agent send notify "Render terminou"
@@ -182,14 +188,21 @@ O agente mostra o ícone do Velksync perto do relógio. Pelo menu (botão direit
 - **Celulares pareados**: lista com **Revogar…** para cada um.
 - **Conferir Wake-on-LAN…**: o mesmo diagnóstico do instalador; **Corrigir** pede administrador só nessa hora.
 - **Cancelar** um desligamento agendado, quando houver.
+- **Enviar para o celular**: o texto ou link copiado no PC, para um dos celulares com o app aberto.
+- **Histórico…**: as últimas ações (veja abaixo).
 - **Avisar o que os celulares fazem**: liga ou desliga os avisos do Windows.
+- **Procurar atualizações agora**: consulta na hora, mesmo com a checagem automática desligada.
 - **Abrir o log**, **Abrir a pasta da configuração** e **Sair do agente…** (volta no próximo login; ligar pelo celular continua funcionando).
 
 Quando um celular pede para desligar, reiniciar ou suspender com alguém usando o PC (sessão desbloqueada), aparece uma contagem de 10 s com **Cancelar** (o botão padrão) e **Desligar agora**. Se alguém cancela, o celular recebe o aviso. Com a tela bloqueada, executa na hora.
 
+## 8.1.1 Histórico de ações
+
+O agente guarda as últimas 200 ações em `history.json`, ao lado da config: quem desligou, reiniciou ou suspendeu (e quem cancelou no PC), agendamentos, comandos, terminal (só o comando, nunca a saída, e só visível com o terminal livre ligado), pareamentos, revogações, atualizações e textos trocados (sem o conteúdo). No app, **Atividade recente** na aba Controle mostra as 3 últimas e **Ver tudo** o resto; no PC, **Histórico…** no menu do ícone.
+
 ## 8.2 Atualizar o app
 
-O app procura versão nova uma vez por dia, ao abrir (desligue em **Configurações → Atualizações**). Havendo, aparece um cartão no topo da lista de PCs: **Atualizar** baixa o APK do processador do celular, só do GitHub e por HTTPS, confere com o `SHA256SUMS` e abre o instalador do Android. Na primeira vez o Android pede para liberar "Instalar apps desta fonte" para o Velksync. O Android só instala por cima um APK assinado com a mesma chave do app instalado, então um arquivo trocado é recusado por ele também. O app de desenvolvimento ("Velksync Dev") não se atualiza.
+O app procura versão nova uma vez por dia, ao abrir (desligue em **Configurações → Atualizações**, onde também fica **Procurar agora**). Havendo, aparece um cartão no topo da lista de PCs: **Atualizar** baixa o APK do processador do celular, só do GitHub e por HTTPS, confere com o `SHA256SUMS` e abre o instalador do Android. Na primeira vez o Android pede para liberar "Instalar apps desta fonte" para o Velksync. O Android só instala por cima um APK assinado com a mesma chave do app instalado, então um arquivo trocado é recusado por ele também. O app de desenvolvimento ("Velksync Dev") não se atualiza.
 
 ## 9. Rodar o app
 
@@ -254,6 +267,7 @@ A release assina o `SHA256SUMS` e confere com `agent/release_key.pem` antes de p
 | Servidor | Limites de tempo de leitura e de cabeçalho; no máximo 3 canais ao vivo por celular. |
 | Presença | Desafio-resposta com HMAC e segredo próprio (derivado do token mestre); processo sem privilégios, sandbox no Linux, limite de respostas por IP. |
 | Bandeja (Windows) | Nenhuma porta nova: o menu faz o que a linha de comando já faz, como o seu usuário. A contagem antes de desligar só se cancela no próprio PC. Avisos mostram o nome do celular e do comando, nunca a saída. |
+| Troca de textos | Só entre celulares pareados e o PC. Link só `http(s)`; o resto é texto na área de transferência, nunca executado. O celular escolhe o PC antes de enviar; o PC avisa o que recebeu. O histórico guarda o fato, não o conteúdo. |
 | Atualizações | Agente e app só baixam do GitHub por HTTPS, com limite de tamanho. O agente só roda o instalador se o `SHA256SUMS` tiver a assinatura Ed25519 das releases e o arquivo bater; o Android só aceita APK com a mesma assinatura do app. Nada é instalado sem a pessoa confirmar no próprio aparelho. |
 | Widget e atalho | Só nome, MAC e estado; desligar sempre passa pelo app e pede confirmação. Componentes internos não exportados. |
 | Rede | Firewall liberado só para a sub-rede local (Windows: rede privada; Linux: `ufw`). |

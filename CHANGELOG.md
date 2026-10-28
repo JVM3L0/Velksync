@@ -3,6 +3,25 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+- Histórico de ações: o agente guarda as últimas 200 (energia, cancelamentos
+  no PC, agendamentos, comandos, terminal sem a saída, pareamentos,
+  revogações, atualizações, textos trocados sem o conteúdo). No app,
+  "Atividade recente" na aba Controle; no PC, "Histórico…" no ícone.
+- Enviar para o celular pelo ícone: o texto ou link copiado no PC vai para o
+  celular escolhido (link abre no navegador dele).
+- Mandar texto do celular para o PC pelo menu Compartilhar do Android: link
+  abre no navegador do PC, outro texto vai para a área de transferência.
+- "Procurar atualizações agora" no menu do ícone e "Procurar agora" em
+  Configurações do app.
+
+### Corrigido
+- Dois cliques em "Atualizar" abriam dois instaladores, que falhavam com
+  "arquivo em uso" e deixavam o agente parado. Agora uma atualização por
+  vez, e o instalador só roda uma instância.
+
 ## [0.6.2] - 2026-10-28
 
 ### Alterado
