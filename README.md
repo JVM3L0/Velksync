@@ -154,7 +154,7 @@ O painel do PC no app mostra CPU, GPU, memória e disco em tempo real, no estilo
 - **Windows**: APIs nativas (as mesmas do Gerenciador de Tarefas). O Windows não expõe temperaturas sem driver de terceiros, então elas não aparecem.
 - **Linux**: `/proc` e `/sys`; GPU AMD pelo driver `amdgpu` e temperatura da CPU pelo `k10temp`/`coretemp`.
 
-Abaixo, **Processos** lista os 10 programas que mais usam CPU ou memória (os processos do mesmo programa somados, como as várias abas de um navegador). Só leitura: nada é encerrado pelo app. O PC só é consultado com a aba aberta.
+Na janela do gráfico (ou pelo botão **Ver processos**), **Processos** lista os 10 programas que mais usam CPU ou memória (os processos do mesmo programa somados, como as várias abas de um navegador). Só leitura: nada é encerrado pelo app. O PC só é consultado com a aba aberta.
 
 ## 6. Mídia
 
