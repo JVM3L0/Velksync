@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'palettes.dart';
 import 'theme.dart';
 
 // Medidores de desempenho no estilo do dashboard do Caelestia: cartões "hero"
@@ -223,6 +224,8 @@ class HeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // A forma da porcentagem fica tingida da cor da própria métrica.
+    final blob = Color.alphaBlend(accent.withValues(alpha: 0.18), scheme.surfaceContainerHigh);
     final text = Theme.of(context).textTheme;
     final hot = (temperature ?? 0) > 90;
     final footer = temperature != null
@@ -316,12 +319,12 @@ class HeroCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 MorphingShape(
                   shape: LoadShape.of(usage),
-                  color: scheme.secondaryContainer,
+                  color: blob,
                   size: 96,
                   child: Text(
                     percentText(usage),
                     style: text.headlineSmall?.copyWith(
-                      color: accent,
+                      color: readable(accent, blob),
                       fontWeight: FontWeight.w700,
                       fontFeatures: tabular,
                     ),

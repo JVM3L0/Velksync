@@ -119,7 +119,13 @@ ThemeData buildTheme(ColorScheme scheme, {RoleColors? roles}) {
       showDragHandle: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.xl))),
     ),
-    // ignore: deprecated_member_use
-    progressIndicatorTheme: const ProgressIndicatorThemeData(year2023: false),
+    // Trilho neutro: nos temas coloridos o secondaryContainer (padrão do M3)
+    // é o destaque cheio e brigava com a cor da barra.
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      // ignore: deprecated_member_use
+      year2023: false,
+      linearTrackColor: scheme.surfaceContainerHighest,
+      circularTrackColor: scheme.surfaceContainerHighest,
+    ),
   );
 }
