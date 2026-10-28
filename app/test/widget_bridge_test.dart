@@ -1,3 +1,6 @@
+import 'package:material_ui/material_ui.dart';
+import 'package:velksync/ui/palettes.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -75,5 +78,23 @@ void main() {
       await send({'action': 'shutdown'});
       expect(got, isEmpty);
     });
+  });
+
+  test('tema do widget: grava os dois modos, não regrava igual e some no dinâmico', () async {
+    SharedPreferences.setMockInitialValues({});
+    final p = Palettes.catppuccin(CatppuccinFlavor.mocha);
+    final light = WidgetBridge.themeColors(p.$1.toScheme(), p.$1.toRoles()!);
+    final dark = WidgetBridge.themeColors(p.$2.toScheme(), p.$2.toRoles()!);
+    expect(dark['bg'], startsWith('#ff'));
+    expect(dark.keys, containsAll(['bg', 'text', 'button', 'on_button', 'danger', 'on_danger']));
+
+    await WidgetBridge.theme(light: light, dark: dark, mode: ThemeMode.dark);
+    final prefs = await SharedPreferences.getInstance();
+    final saved = jsonDecode(prefs.getString(WidgetBridge.themeKey)!) as Map<String, dynamic>;
+    expect(saved['mode'], 'dark');
+    expect((saved['dark'] as Map)['button'], dark['button']);
+
+    await WidgetBridge.theme();
+    expect(prefs.getString(WidgetBridge.themeKey), isNull, reason: 'tema dinâmico: cores do sistema');
   });
 }

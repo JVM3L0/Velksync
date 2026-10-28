@@ -8,6 +8,9 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.content.res.Configuration
+import android.os.Build
 import android.text.format.DateFormat
 import android.text.format.DateUtils
 import android.view.View
@@ -89,6 +92,28 @@ object WakeWidget {
             R.id.widget_power, "setColorFilter",
             context.getColor(if (view.action == WidgetAction.SHUTDOWN) R.color.widget_on_button_danger else R.color.widget_on_button),
         )
+        // Tema do app (Android 12+, onde dá para tingir os fundos arredondados).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val night = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+                Configuration.UI_MODE_NIGHT_YES
+            WidgetTheme.pick(prefs.getString("flutter.widget_theme", null), night)?.let { c ->
+                fun tint(id: Int, color: Int) = rv.setColorStateList(id, "setBackgroundTintList", ColorStateList.valueOf(color))
+                tint(R.id.widget_root, c.bg)
+                tint(R.id.widget_icon, c.iconBg)
+                rv.setColorStateList(R.id.widget_icon, "setImageTintList", ColorStateList.valueOf(c.icon))
+                rv.setTextColor(R.id.widget_title, c.text)
+                rv.setTextColor(R.id.widget_status, c.subtext)
+                val (bg, fg) = when (view.action) {
+                    WidgetAction.WAKE -> c.button to c.onButton
+                    WidgetAction.SHUTDOWN -> c.danger to c.onDanger
+                    WidgetAction.NONE -> c.buttonOff to c.onButtonOff
+                }
+                tint(R.id.widget_power, bg)
+                rv.setColorStateList(R.id.widget_power, "setImageTintList", ColorStateList.valueOf(fg))
+                rv.setInt(R.id.widget_power, "setColorFilter", fg)
+                rv.setColorStateList(R.id.widget_progress, "setIndeterminateTintList", ColorStateList.valueOf(c.button))
+            }
+        }
         rv.setContentDescription(
             R.id.widget_power,
             if (view.action == WidgetAction.SHUTDOWN) "Desligar ${view.title}" else "Ligar ${view.title}",

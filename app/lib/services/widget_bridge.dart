@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../ui/role_colors.dart';
 import 'pc_probe.dart';
 
 /// Toque no widget: qual PC e, se foi o botão de desligar, `shutdown`.
@@ -54,6 +56,45 @@ class WidgetBridge {
     }
     change(map);
     await prefs.setString(prefsKey, jsonEncode(map));
+    await _refresh();
+  }
+
+  static const themeKey = 'widget_theme';
+
+  /// Cores do widget num modo (claro ou escuro), tiradas do tema do app.
+  static Map<String, String> themeColors(ColorScheme s, RoleColors r) {
+    String hex(Color c) => '#${c.toARGB32().toRadixString(16).padLeft(8, '0')}';
+    return {
+      'bg': hex(s.surfaceContainer),
+      'text': hex(s.onSurface),
+      'subtext': hex(s.onSurfaceVariant),
+      'icon_bg': hex(s.secondaryContainer),
+      'icon': hex(s.onSecondaryContainer),
+      'button': hex(s.primary),
+      'on_button': hex(s.onPrimary),
+      'button_off': hex(s.surfaceContainerHighest),
+      'on_button_off': hex(s.onSurfaceVariant),
+      'danger': hex(r.danger),
+      'on_danger': hex(r.onDanger),
+    };
+  }
+
+  /// O widget segue o tema do app: grava as cores dos dois modos e o modo
+  /// escolhido; null (tema dinâmico) volta às cores do sistema. Só regrava
+  /// e redesenha quando muda.
+  static Future<void> theme({
+    Map<String, String>? light,
+    Map<String, String>? dark,
+    ThemeMode mode = ThemeMode.system,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = light == null || dark == null ? null : jsonEncode({'mode': mode.name, 'light': light, 'dark': dark});
+    if (prefs.getString(themeKey) == value) return;
+    if (value == null) {
+      await prefs.remove(themeKey);
+    } else {
+      await prefs.setString(themeKey, value);
+    }
     await _refresh();
   }
 
