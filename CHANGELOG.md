@@ -20,6 +20,8 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
   memória, somando os processos de cada um. Só leitura.
 - Primeira vez guiada: o que é, instalar o agente, parear e testar o Ligar
   (com dicas se não funcionar). Só sem PC cadastrado; dá para pular.
+- O widget da tela inicial segue o tema do app (Android 12+); com o tema
+  dinâmico, continua com as cores do sistema.
 
 ### Corrigido
 - Dois cliques em "Atualizar" abriam dois instaladores, que falhavam com
