@@ -89,6 +89,35 @@ Sessão de mídia do Android com capa, título, pausar e pular. Decidir antes:
   build de release do APK e dos agentes, revisão de segurança do que mudou.
 - Nada é enviado nem publicado sem pedido explícito.
 
+## 6. Plano 0.7.0 e 0.8.0
+
+### v0.7.0: troca entre PC e celular
+1. **Histórico de ações.** O agente guarda as últimas 200 em `history.json`
+   (quando, quem, o quê, resultado): energia (pedida, cancelada no PC,
+   agendada), comandos, terminal (só o comando, nunca a saída),
+   pareamento, revogação, atualização e textos enviados. `GET /api/history`;
+   o terminal só aparece com o terminal livre ligado. Ícone: "Histórico…"
+   com as 15 últimas. App: cartão "Atividade recente" na aba Controle com
+   as 3 últimas e "Ver tudo".
+2. **Enviar para o celular pelo ícone.** Lê o texto copiado no PC e envia
+   como link (`http(s)://`) ou texto, para um celular escolhido entre os
+   conectados. Sem nenhum, o item fica desativado. Limite de 64 KB.
+3. **Mandar texto do celular para o PC.** Menu Compartilhar do Android, só
+   texto: link `http(s)` abre no navegador do PC, outro texto vai para a
+   área de transferência. Aviso no ícone e registro no histórico. Nada de
+   arquivos.
+4. **Procurar atualização manualmente.** "Procurar atualizações agora" no
+   menu do ícone e "Procurar agora" em Configurações do app, sem o limite
+   diário.
+5. Uma atualização por vez (já feito).
+
+### v0.8.0: começo e visão do PC
+1. **Primeira vez guiada** (só sem PC cadastrado, dá para pular): o que é,
+   instalar o agente (copiar ou compartilhar o link), parear (QR ou busca)
+   e "Teste: ligar" com dicas se não funcionar.
+2. **Processos, só visualização.** Os 10 que mais usam CPU e memória, na
+   aba Desempenho, lidos só com a seção aberta. Sem encerrar.
+
 ## Ideias guardadas
 
 Levantadas em 25/10/2026, ainda sem decisão. Cada uma ganha plano, casos de
@@ -97,16 +126,16 @@ uso, testes e esboço antes de implementar.
 | # | Ideia | Tamanho | Nota |
 |---|---|---|---|
 | 1 | Reiniciar direto no outro sistema ("Reiniciar no Windows/Linux") | médio | `grub-reboot` / `bcdedit /bootsequence`; só na próxima inicialização |
-| 2 | Mandar do celular para o PC (menu Compartilhar: link abre no PC, texto vai para a área de transferência) | médio | hoje só existe PC → celular |
+| 2 | ~~Mandar do celular para o PC~~ | | na v0.7.0, só texto (ver item 6); arquivos ficam para depois |
 | 3 | Controles de mídia na notificação e na tela de bloqueio | grande | ver item 4 acima |
-| 4 | Ligar o PC num horário (diário ou uma vez) | pequeno/médio | Wake-on-LAN agendado no celular |
+| 4 | Ligar o PC num horário (dias da semana ou uma vez) | pequeno/médio | Wake-on-LAN agendado no celular (AlarmManager); adiado na decisão de 28/10/2026 |
 | 5 | Atalhos no ícone do app, condicionais: "Ligar" com o PC desligado, "Desligar"/"Reiniciar" ligado (último estado visto pelo app, como o widget) | pequeno | um por PC (até ~4); desatualizado só mostra a opção errada: ligar é inofensivo e desligar confere o estado real e confirma; assistentes costumam abrir atalhos, ponte até o 12 |
 | 6 | Exportar/importar os PCs em backup criptografado | médio | evita parear de novo ao trocar de celular |
 | 7 | Touchpad e teclado remotos | grande | |
 | 8 | Instalar e testar o agente no Linux do dual boot | pequeno | com o dono do projeto |
 | 9 | Acesso fora de casa com Tailscale | médio | mais configuração e docs que código |
 | 10 | Avisos do PC com o app fechado | grande | custo de bateria ou privacidade |
-| 11 | Primeira vez guiada: o que é o agente, QR e teste de ligar ("Funcionou?") | médio | hoje quem instala cai numa tela vazia |
+| 11 | ~~Primeira vez guiada~~ | | na v0.8.0 (ver item 6) |
 | 12 | Ligar e desligar pelo Gemini ("liga o Velkhyro"), via AppFunctions | pequeno | depende do Google liberar a integração (em teste fechado em maio/2026); ligar sem confirmação, desligar pede confirmação no app |
 | 13 | Assinar o instalador do Windows pela SignPath Foundation (grátis para código aberto) | pequeno | tira o aviso do SmartScreen; exige inscrição e revisão do projeto por eles |
 | 14 | Pacote `.deb`/`.rpm` e `velksync-agent setup` guiado no Linux | médio | o `doctor` ganha a parte do Linux (`ethtool`, NetworkManager) |
