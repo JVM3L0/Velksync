@@ -15,6 +15,7 @@ import '../ui/perf.dart';
 import '../ui/schedule.dart';
 import '../ui/stats_chart.dart';
 import '../ui/history.dart';
+import '../ui/processes.dart';
 import '../ui/role_colors.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
@@ -454,7 +455,13 @@ class _DeviceScreenState extends State<DeviceScreen> {
   Widget _performanceTab() {
     final s = _stats;
     if (s == null) return const Center(child: CircularProgressIndicator());
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 0, 16, 32), children: [_performanceSection(s)]);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      children: [
+        _performanceSection(s),
+        if (_info?.has('processes') ?? false) ProcessesSection(load: _client.processes),
+      ],
+    );
   }
 
   Widget _hero(PcStatus status) {

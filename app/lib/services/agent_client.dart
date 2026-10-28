@@ -139,6 +139,11 @@ class AgentClient {
     for (final c in await _send('GET', '/api/commands') as List) PresetCommand.fromJson(c as Map<String, dynamic>),
   ];
 
+  /// Programas que mais usam CPU e memória (só leitura).
+  Future<ProcessList> processes() async => ProcessList.fromJson(
+    await _send('GET', '/api/processes', timeout: const Duration(seconds: 8)) as Map<String, dynamic>,
+  );
+
   /// Últimas ações no PC, da mais nova para a mais antiga.
   Future<List<HistoryEntry>> history() async {
     final data = await _send('GET', '/api/history');
@@ -260,4 +265,35 @@ class HistoryEntry {
     text: j['text'] as String? ?? '',
     failed: j['failed'] as bool? ?? false,
   );
+}
+
+/// Um programa na lista de processos; vários processos do mesmo programa somados.
+class ProcessInfo {
+  final String name;
+  final int count;
+  final double cpu; // % do total do PC
+  final int mem; // bytes
+
+  const ProcessInfo({required this.name, this.count = 1, this.cpu = 0, this.mem = 0});
+
+  factory ProcessInfo.fromJson(Map<String, dynamic> j) => ProcessInfo(
+    name: j['name'] as String? ?? '',
+    count: (j['count'] as num?)?.toInt() ?? 1,
+    cpu: (j['cpu'] as num?)?.toDouble() ?? 0,
+    mem: (j['mem'] as num?)?.toInt() ?? 0,
+  );
+}
+
+class ProcessList {
+  final List<ProcessInfo> byCpu, byMem;
+  final int total;
+  const ProcessList({this.byCpu = const [], this.byMem = const [], this.total = 0});
+
+  factory ProcessList.fromJson(Map<String, dynamic> j) {
+    List<ProcessInfo> list(Object? v) => [
+      for (final e in v as List? ?? const [])
+        if (e is Map<String, dynamic>) ProcessInfo.fromJson(e),
+    ];
+    return ProcessList(byCpu: list(j['by_cpu']), byMem: list(j['by_mem']), total: (j['total'] as num?)?.toInt() ?? 0);
+  }
 }
