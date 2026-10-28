@@ -1,6 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'role_colors.dart';
+
 /// Rounding scale from Caelestia (quickshell), which follows Material 3 Expressive.
 abstract final class Radii {
   static const double xs = 4;
@@ -35,7 +37,7 @@ ColorScheme schemeFrom(ColorScheme? dynamic, Brightness brightness) =>
 TextStyle monoStyle({double size = 13, Color? color}) =>
     GoogleFonts.cascadiaCode(fontSize: size, height: 1.45, color: color);
 
-ThemeData buildTheme(ColorScheme scheme) {
+ThemeData buildTheme(ColorScheme scheme, {RoleColors? roles}) {
   final base = ThemeData(colorScheme: scheme);
   final text = GoogleFonts.googleSansFlexTextTheme(base.textTheme)
       .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
@@ -46,6 +48,7 @@ ThemeData buildTheme(ColorScheme scheme) {
       UnderlineInputBorder(borderRadius: BorderRadius.circular(Radii.lg), borderSide: side);
 
   return base.copyWith(
+    extensions: [roles ?? RoleColors.fromScheme(scheme)],
     textTheme: text,
     scaffoldBackgroundColor: scheme.surface,
     // Volta preditiva do Android 14+: a tela acompanha o gesto e revela a de

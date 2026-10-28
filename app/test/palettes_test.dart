@@ -15,23 +15,26 @@ double contrast(Color a, Color b) {
   return (math.max(l1, l2) + 0.05) / (math.min(l1, l2) + 0.05);
 }
 
-/// Cada paleta com cada destaque que ela oferece (ou só ela, sem seletor).
-Iterable<Palette> get _variants sync* {
+/// Cada paleta com cada destaque e cada intensidade (ou só ela, sem seletor).
+Iterable<(Palette, String)> get _variants sync* {
   for (final p in Palettes.all) {
     if (p.accents.isEmpty) {
-      yield p;
+      yield (p, 'padrão');
       continue;
     }
     for (final id in p.accents.keys) {
-      yield p.withAccent(id);
+      for (final i in ThemeIntensity.values) {
+        yield (p.withAccent(id).soften(i), '$id, ${i.label}');
+      }
     }
   }
 }
 
 void main() {
-  for (final p in _variants) {
-    group('${p.name} (${p.accent.isEmpty ? 'padrão' : p.accent})', () {
+  for (final (p, label) in _variants) {
+    group('${p.name} ($label)', () {
       final s = p.toScheme();
+      final r = p.toRoles();
       final pairs = {
         'texto/fundo': (s.onSurface, s.surface),
         'texto secundário/fundo': (s.onSurfaceVariant, s.surface),
@@ -45,6 +48,16 @@ void main() {
         'erro': (s.onErrorContainer, s.errorContainer),
         'snackbar': (s.onInverseSurface, s.inverseSurface),
         'ação do snackbar': (s.inversePrimary, s.inverseSurface),
+        if (r != null) ...{
+          'desligar': (r.onDanger, r.danger),
+          'reiniciar': (r.onWarn, r.warn),
+          'suspender': (r.onInfo, r.info),
+          'ok': (r.onOk, r.ok),
+          'CPU/cartão': (r.cpu, s.surfaceContainer),
+          'GPU/cartão': (r.gpu, s.surfaceContainer),
+          'memória/cartão': (r.mem, s.surfaceContainer),
+          'disco/cartão': (r.disk, s.surfaceContainer),
+        },
       };
       for (final MapEntry(key: name, value: (fg, bg)) in pairs.entries) {
         test('$name ≥ 4.5:1', () {
@@ -81,5 +94,27 @@ void main() {
     }
     expect(Palettes.gruvbox(GruvboxVariant.soft).$2.accent, 'green');
     expect(Palettes.gruvbox(GruvboxVariant.classic).$2.accent, 'orange');
+  });
+
+  test('intensidade: Vivo não muda nada; mais pastel aproxima as cores do texto (escuro) ou do fundo (claro)', () {
+    final d = Palettes.catppuccinMocha, l = Palettes.catppuccinLatte;
+    expect(d.soften(ThemeIntensity.vivid), same(d));
+    double dist(Color a, Color b) => (a.r - b.r).abs() + (a.g - b.g).abs() + (a.b - b.b).abs();
+    expect(dist(d.soften(ThemeIntensity.soft).primary, d.text), lessThan(dist(d.primary, d.text)));
+    expect(dist(l.soften(ThemeIntensity.soft).primary, l.lowest), lessThan(dist(l.primary, l.lowest)));
+    expect(d.soften(ThemeIntensity.soft).background, d.background);
+  });
+
+  test('padrões: Bem pastel no Catppuccin e no Gruvbox Suave, Vivo no Original', () {
+    expect(
+      Palettes.catppuccin(CatppuccinFlavor.mocha).$2.primary,
+      Palettes.catppuccinMocha.soften(ThemeIntensity.soft).primary,
+    );
+    expect(Palettes.gruvbox(GruvboxVariant.classic).$2.primary, Palettes.gruvboxDark.primary);
+    expect(
+      Palettes.gruvbox(GruvboxVariant.soft).$2.primary,
+      Palettes.gruvboxSoftDark.soften(ThemeIntensity.soft).primary,
+    );
+    expect(Palettes.velksyncDark.toRoles(), isNull);
   });
 }

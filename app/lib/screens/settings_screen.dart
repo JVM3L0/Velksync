@@ -32,9 +32,11 @@ class SettingsScreen extends StatelessWidget {
             List<Color> swatches(ThemeFamily f) => switch (f) {
               ThemeFamily.dynamic => [wall.surface, wall.primary, wall.secondary, wall.tertiary, wall.error],
               ThemeFamily.velksync => pick(Palettes.velksync).swatches,
-              ThemeFamily.gruvbox => pick(Palettes.gruvbox(settings.gruvbox, settings.gruvboxAccent)).swatches,
+              ThemeFamily.gruvbox => pick(
+                Palettes.gruvbox(settings.gruvbox, settings.gruvboxAccent, settings.gruvboxIntensity),
+              ).swatches,
               ThemeFamily.catppuccin => pick(
-                Palettes.catppuccin(settings.catppuccin, settings.catppuccinAccent),
+                Palettes.catppuccin(settings.catppuccin, settings.catppuccinAccent, settings.catppuccinIntensity),
               ).swatches,
             };
             return ListView(
@@ -90,10 +92,27 @@ class SettingsScreen extends StatelessWidget {
                   curve: Motion.effects,
                   alignment: Alignment.topCenter,
                   child: switch (settings.palettes) {
-                    final p? when settings.accentOptions.isNotEmpty => _AccentPicker(
-                      options: settings.accentOptions,
-                      palette: pick(p),
-                      onSelected: settings.setAccent,
+                    final p? when settings.accentOptions.isNotEmpty => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _AccentPicker(
+                          options: settings.accentOptions,
+                          palette: pick(p),
+                          onSelected: settings.setAccent,
+                        ),
+                        _Variant(
+                          label: 'Intensidade',
+                          hint: 'Quanto as cores são lavadas; os fundos e o texto não mudam.',
+                          child: SegmentedButton<ThemeIntensity>(
+                            showSelectedIcon: false,
+                            segments: [
+                              for (final i in ThemeIntensity.values) ButtonSegment(value: i, label: Text(i.label)),
+                            ],
+                            selected: {settings.intensity},
+                            onSelectionChanged: (s) => settings.setIntensity(s.first),
+                          ),
+                        ),
+                      ],
                     ),
                     _ => const SizedBox(width: double.infinity),
                   },

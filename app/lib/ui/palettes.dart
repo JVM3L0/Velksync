@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
+import 'role_colors.dart';
+
 /// Paletas fixas (Velksync, Gruvbox e Catppuccin) mapeadas para os papéis do Material 3.
 /// Cores oficiais: github.com/morhetz/gruvbox, github.com/sainnhe/gruvbox-material
 /// e github.com/catppuccin/palette. Uso das cores: guia de estilo do Catppuccin
@@ -26,6 +28,18 @@ enum CatppuccinFlavor {
 
   final String label;
   const CatppuccinFlavor(this.label);
+}
+
+/// Quanto as cores da paleta são lavadas: no escuro, puxadas para o tom do
+/// texto; no claro, para o fundo. Fundos e texto não mudam.
+enum ThemeIntensity {
+  vivid('Vivo', 0, 0),
+  pastel('Pastel', 0.22, 0.25),
+  soft('Bem pastel', 0.40, 0.45);
+
+  final String label;
+  final double dark, light;
+  const ThemeIntensity(this.label, this.dark, this.light);
 }
 
 /// Cor de destaque que a pessoa escolhe; o id fica salvo nas preferências.
@@ -55,6 +69,9 @@ class Palette {
   /// Snackbar e afins: a superfície do tema oposto (Latte no escuro, Mocha no claro).
   final Color? inverseBackground, inverseText;
 
+  /// Cores por função (ver RoleColors); sem elas, o tema deriva do ColorScheme.
+  final Color? red, yellow, blue, green, pink;
+
   const Palette({
     required this.name,
     required this.brightness,
@@ -73,6 +90,11 @@ class Palette {
     this.solid = false,
     this.inverseBackground,
     this.inverseText,
+    this.red,
+    this.yellow,
+    this.blue,
+    this.green,
+    this.pink,
   });
 
   /// Amostras para a prévia na tela de configurações.
@@ -89,24 +111,100 @@ class Palette {
     } else if (ter == c) {
       ter = primary;
     }
-    return Palette(
-      name: name,
-      brightness: brightness,
-      background: background,
-      lowest: lowest,
-      containers: containers,
-      text: text,
-      subtext: subtext,
-      outline: outline,
-      primary: c,
-      secondary: sec,
-      tertiary: ter,
-      error: error,
-      accents: accents,
-      accent: id,
-      solid: solid,
-      inverseBackground: inverseBackground,
-      inverseText: inverseText,
+    return _copy(primary: c, secondary: sec, tertiary: ter, accent: id);
+  }
+
+  /// Lava as cores de destaque e de função (fundos e texto ficam).
+  Palette soften(ThemeIntensity intensity) {
+    final t = brightness == Brightness.dark ? intensity.dark : intensity.light;
+    if (t == 0) return this;
+    final target = brightness == Brightness.dark ? text : lowest;
+    Color m(Color c) => Color.lerp(c, target, t)!;
+    Color? mm(Color? c) => c == null ? null : m(c);
+    return _copy(
+      primary: m(primary),
+      secondary: m(secondary),
+      tertiary: m(tertiary),
+      error: m(error),
+      accents: accents.map((k, v) => MapEntry(k, m(v))),
+      red: mm(red),
+      yellow: mm(yellow),
+      blue: mm(blue),
+      green: mm(green),
+      pink: mm(pink),
+    );
+  }
+
+  Palette _copy({
+    Color? primary,
+    Color? secondary,
+    Color? tertiary,
+    Color? error,
+    Map<String, Color>? accents,
+    String? accent,
+    Color? red,
+    Color? yellow,
+    Color? blue,
+    Color? green,
+    Color? pink,
+  }) => Palette(
+    name: name,
+    brightness: brightness,
+    background: background,
+    lowest: lowest,
+    containers: containers,
+    text: text,
+    subtext: subtext,
+    outline: outline,
+    primary: primary ?? this.primary,
+    secondary: secondary ?? this.secondary,
+    tertiary: tertiary ?? this.tertiary,
+    error: error ?? this.error,
+    accents: accents ?? this.accents,
+    accent: accent ?? this.accent,
+    solid: solid,
+    inverseBackground: inverseBackground,
+    inverseText: inverseText,
+    red: red ?? this.red,
+    yellow: yellow ?? this.yellow,
+    blue: blue ?? this.blue,
+    green: green ?? this.green,
+    pink: pink ?? this.pink,
+  );
+
+  /// Fundo pastel do mesmo tom (temas claros): a cor quase toda puxada para o fundo.
+  Color _pastel(Color c) => Color.lerp(c, lowest, 0.78)!;
+
+  /// Cores por função desta paleta; null nas que não têm (usam o ColorScheme).
+  RoleColors? toRoles() {
+    final (r, y, b, g, p) = (red, yellow, blue, green, pink);
+    if (r == null || y == null || b == null || g == null || p == null) return null;
+    final dark = brightness == Brightness.dark;
+    // Escuro: bloco cheio na cor, texto escuro. Claro: fundo pastel, texto na cor.
+    (Color, Color) block(Color c) {
+      if (dark) return (readable(c, lowest), lowest);
+      final bg = _pastel(c);
+      return (bg, readable(c, bg));
+    }
+
+    final card = containers[1];
+    final (danger, onDanger) = block(r);
+    final (warn, onWarn) = block(y);
+    final (info, onInfo) = block(b);
+    final (ok, onOk) = block(g);
+    return RoleColors(
+      danger: danger,
+      onDanger: onDanger,
+      warn: warn,
+      onWarn: onWarn,
+      info: info,
+      onInfo: onInfo,
+      ok: ok,
+      onOk: onOk,
+      cpu: readable(b, card),
+      gpu: readable(p, card),
+      mem: readable(g, card),
+      disk: readable(y, card),
     );
   }
 
@@ -125,17 +223,25 @@ class Palette {
     final Color primaryContainer, onPrimaryContainer, secondaryContainer, onSecondaryContainer;
     final Color tertiaryContainer, onTertiaryContainer, errorContainer, onErrorContainer;
     if (solid) {
-      // Destaque cheio só no que é principal; o resto fica numa superfície
-      // neutra da paleta, com o ícone ou o texto na cor de destaque.
-      final neutral = containers[2];
+      // Colorido: no escuro, contêineres cheios na cor com texto escuro; no
+      // claro, o principal cheio e o resto em fundo pastel com o texto na cor.
       primaryContainer = primary;
       onPrimaryContainer = onAccent;
-      secondaryContainer = neutral;
-      onSecondaryContainer = readable(this.primary, neutral);
-      tertiaryContainer = neutral;
-      onTertiaryContainer = readable(text, neutral);
-      errorContainer = neutral;
-      onErrorContainer = readable(this.error, neutral);
+      if (dark) {
+        secondaryContainer = primary;
+        onSecondaryContainer = onAccent;
+        tertiaryContainer = tertiary;
+        onTertiaryContainer = onAccent;
+        errorContainer = error;
+        onErrorContainer = onAccent;
+      } else {
+        secondaryContainer = _pastel(this.primary);
+        onSecondaryContainer = readable(this.primary, secondaryContainer);
+        tertiaryContainer = _pastel(this.tertiary);
+        onTertiaryContainer = readable(this.tertiary, tertiaryContainer);
+        errorContainer = _pastel(this.error);
+        onErrorContainer = readable(this.error, errorContainer);
+      }
     } else {
       // Contêineres "tonais": a cor de destaque misturada ao fundo, como no M3.
       Color container(Color c) => Color.alphaBlend(c.withValues(alpha: dark ? 0.24 : 0.20), background);
@@ -262,6 +368,11 @@ abstract final class Palettes {
 
   static const gruvboxDark = Palette(
     name: 'Gruvbox Dark',
+    red: Color(0xFFFB4934),
+    yellow: Color(0xFFFABD2F),
+    blue: Color(0xFF83A598),
+    green: Color(0xFFB8BB26),
+    pink: Color(0xFFD3869B),
     brightness: Brightness.dark,
     solid: true,
     background: Color(0xFF1D2021), // bg0_h
@@ -288,6 +399,11 @@ abstract final class Palettes {
 
   static const gruvboxLight = Palette(
     name: 'Gruvbox Light',
+    red: Color(0xFF9D0006),
+    yellow: Color(0xFFB57614),
+    blue: Color(0xFF076678),
+    green: Color(0xFF79740E),
+    pink: Color(0xFF8F3F71),
     brightness: Brightness.light,
     solid: true,
     background: Color(0xFFF2E5BC), // bg0_s
@@ -316,6 +432,11 @@ abstract final class Palettes {
   // pastel. O padrão é o verde, como no Gruvbox Material do VS Code.
   static const gruvboxSoftDark = Palette(
     name: 'Gruvbox Suave Dark',
+    red: Color(0xFFEA6962),
+    yellow: Color(0xFFD8A657),
+    blue: Color(0xFF7DAEA3),
+    green: Color(0xFFA9B665),
+    pink: Color(0xFFD3869B),
     brightness: Brightness.dark,
     solid: true,
     background: Color(0xFF282828), // bg0 medium
@@ -342,6 +463,11 @@ abstract final class Palettes {
 
   static const gruvboxSoftLight = Palette(
     name: 'Gruvbox Suave Light',
+    red: Color(0xFFC14A4A),
+    yellow: Color(0xFFB47109),
+    blue: Color(0xFF45707A),
+    green: Color(0xFF6C782E),
+    pink: Color(0xFF945E80),
     brightness: Brightness.light,
     solid: true,
     background: Color(0xFFF2E5BC), // bg0 soft
@@ -380,6 +506,11 @@ abstract final class Palettes {
 
   static const catppuccinMocha = Palette(
     name: 'Catppuccin Mocha',
+    red: Color(0xFFF38BA8),
+    yellow: Color(0xFFF9E2AF),
+    blue: Color(0xFF89B4FA),
+    green: Color(0xFFA6E3A1),
+    pink: Color(0xFFF5C2E7),
     brightness: Brightness.dark,
     solid: true,
     background: Color(0xFF181825), // mantle
@@ -410,6 +541,11 @@ abstract final class Palettes {
 
   static const catppuccinMacchiato = Palette(
     name: 'Catppuccin Macchiato',
+    red: Color(0xFFED8796),
+    yellow: Color(0xFFEED49F),
+    blue: Color(0xFF8AADF4),
+    green: Color(0xFFA6DA95),
+    pink: Color(0xFFF5BDE6),
     brightness: Brightness.dark,
     solid: true,
     background: Color(0xFF1E2030), // mantle
@@ -440,6 +576,11 @@ abstract final class Palettes {
 
   static const catppuccinFrappe = Palette(
     name: 'Catppuccin Frappé',
+    red: Color(0xFFE78284),
+    yellow: Color(0xFFE5C890),
+    blue: Color(0xFF8CAAEE),
+    green: Color(0xFFA6D189),
+    pink: Color(0xFFF4B8E4),
     brightness: Brightness.dark,
     solid: true,
     background: Color(0xFF292C3C), // mantle
@@ -470,6 +611,11 @@ abstract final class Palettes {
 
   static const catppuccinLatte = Palette(
     name: 'Catppuccin Latte',
+    red: Color(0xFFD20F39),
+    yellow: Color(0xFFDF8E1D),
+    blue: Color(0xFF1E66F5),
+    green: Color(0xFF40A02B),
+    pink: Color(0xFFEA76CB),
     brightness: Brightness.light,
     solid: true,
     background: Color(0xFFE6E9EF), // mantle
@@ -514,20 +660,29 @@ abstract final class Palettes {
   static const velksync = (velksyncLight, velksyncDark);
 
   /// [accent]: id escolhido em Configurações; null usa o padrão da variante.
-  static (Palette light, Palette dark) gruvbox(GruvboxVariant v, [String? accent]) {
+  /// [intensity]: null usa o padrão (Vivo no Original, Bem pastel no Suave).
+  static (Palette light, Palette dark) gruvbox(GruvboxVariant v, [String? accent, ThemeIntensity? intensity]) {
     final (l, d) = switch (v) {
       GruvboxVariant.soft => (gruvboxSoftLight, gruvboxSoftDark),
       GruvboxVariant.classic => (gruvboxLight, gruvboxDark),
     };
-    return (l.withAccent(accent), d.withAccent(accent));
+    final i = intensity ?? defaultIntensity(v);
+    return (l.withAccent(accent).soften(i), d.withAccent(accent).soften(i));
   }
 
-  static (Palette light, Palette dark) catppuccin(CatppuccinFlavor f, [String? accent]) => (
-    catppuccinLatte.withAccent(accent),
-    switch (f) {
-      CatppuccinFlavor.frappe => catppuccinFrappe,
-      CatppuccinFlavor.macchiato => catppuccinMacchiato,
-      CatppuccinFlavor.mocha => catppuccinMocha,
-    }.withAccent(accent),
-  );
+  static ThemeIntensity defaultIntensity([GruvboxVariant? v]) =>
+      v == GruvboxVariant.classic ? ThemeIntensity.vivid : ThemeIntensity.soft;
+
+  /// [intensity]: null usa Bem pastel.
+  static (Palette light, Palette dark) catppuccin(CatppuccinFlavor f, [String? accent, ThemeIntensity? intensity]) {
+    final i = intensity ?? ThemeIntensity.soft;
+    return (
+      catppuccinLatte.withAccent(accent).soften(i),
+      switch (f) {
+        CatppuccinFlavor.frappe => catppuccinFrappe,
+        CatppuccinFlavor.macchiato => catppuccinMacchiato,
+        CatppuccinFlavor.mocha => catppuccinMocha,
+      }.withAccent(accent).soften(i),
+    );
+  }
 }

@@ -14,6 +14,7 @@ import '../ui/media_panel.dart';
 import '../ui/perf.dart';
 import '../ui/schedule.dart';
 import '../ui/stats_chart.dart';
+import '../ui/role_colors.dart';
 import '../ui/theme.dart';
 import '../ui/transitions.dart';
 import '../ui/update_notice.dart';
@@ -337,27 +338,28 @@ class _DeviceScreenState extends State<DeviceScreen> {
   /// número ímpar de botões, o primeiro ocupa a linha toda.
   List<Widget> _energy(Device d, PcStatus status, bool online, ColorScheme scheme) {
     final canWake = d.mac.isNotEmpty;
+    final roles = RoleColors.of(context);
     final tiles = <Widget>[
       if (online) ...[
         MorphTile(
           icon: Symbols.power_off_rounded,
           label: 'Desligar',
-          color: Color.alphaBlend(scheme.error.withValues(alpha: 0.16), scheme.surfaceContainer),
-          onColor: scheme.error,
+          color: roles.danger,
+          onColor: roles.onDanger,
           onTap: () => _power('shutdown', 'Desligar'),
         ),
         MorphTile(
           icon: Symbols.restart_alt_rounded,
           label: 'Reiniciar',
-          color: scheme.secondaryContainer,
-          onColor: scheme.onSecondaryContainer,
+          color: roles.warn,
+          onColor: roles.onWarn,
           onTap: () => _power('reboot', 'Reiniciar'),
         ),
         MorphTile(
           icon: Symbols.bedtime_rounded,
           label: 'Suspender',
-          color: scheme.tertiaryContainer,
-          onColor: scheme.onTertiaryContainer,
+          color: roles.info,
+          onColor: roles.onInfo,
           onTap: () => _power('sleep', 'Suspender'),
         ),
         if (_info!.has('schedule'))
@@ -556,6 +558,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
 
   /// Dashboard de desempenho no estilo do Caelestia.
   Widget _performanceSection(PcStats s) {
+    final roles = RoleColors.of(context);
     final scheme = Theme.of(context).colorScheme;
     final gpu = s.gpu;
     return Column(
@@ -579,7 +582,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
           label: 'CPU',
           subLabel: s.cpuName.isNotEmpty ? shortCpuName(s.cpuName) : '${s.cpuThreads} threads',
           usage: s.cpuPercent / 100,
-          accent: scheme.primary,
+          accent: roles.cpu,
           temperature: s.cpuTemp,
           fallback: (icon: Symbols.timer_rounded, text: 'Ligado há ${formatUptime(s.uptime)}', fraction: null),
           onTap: () => showStatsSheet(context, _history, Metric.cpu),
@@ -591,7 +594,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
             label: 'GPU',
             subLabel: gpu.name,
             usage: gpu.percent / 100,
-            accent: scheme.secondary,
+            accent: roles.gpu,
             onTap: () => showStatsSheet(context, _history, Metric.gpu),
             temperature: gpu.temp,
             fallback: gpu.vramTotal == 0
@@ -612,7 +615,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 title: 'Memória',
                 used: s.memUsed,
                 total: s.memTotal,
-                accent: scheme.tertiary,
+                accent: roles.mem,
                 onTap: () => showStatsSheet(context, _history, Metric.mem),
               ),
             ),
@@ -623,7 +626,7 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 title: 'Disco',
                 used: s.diskUsed,
                 total: s.diskTotal,
-                accent: scheme.primary,
+                accent: roles.disk,
               ),
             ),
           ],

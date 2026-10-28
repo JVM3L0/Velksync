@@ -24,7 +24,8 @@ class VelksyncApp extends StatelessWidget {
       listenable: settings,
       builder: (_, _) => DynamicColorBuilder(
         builder: (light, dark) {
-          final (lightScheme, darkScheme) = switch (settings.palettes) {
+          final palettes = settings.palettes;
+          final (lightScheme, darkScheme) = switch (palettes) {
             // Cores do papel de parede (Material You), como o Caelestia faz no desktop.
             null => (schemeFrom(light, Brightness.light), schemeFrom(dark, Brightness.dark)),
             (final l, final d) => (l.toScheme(), d.toScheme()),
@@ -34,8 +35,8 @@ class VelksyncApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             scaffoldMessengerKey: scaffoldMessengerKey,
             themeMode: settings.mode,
-            theme: buildTheme(lightScheme),
-            darkTheme: buildTheme(darkScheme),
+            theme: buildTheme(lightScheme, roles: palettes?.$1.toRoles()),
+            darkTheme: buildTheme(darkScheme, roles: palettes?.$2.toRoles()),
             themeAnimationDuration: Motion.spatialDuration,
             themeAnimationCurve: Motion.effects,
             home: HomeScreen(messenger: scaffoldMessengerKey, settings: settings),

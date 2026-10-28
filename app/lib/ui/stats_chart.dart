@@ -3,12 +3,13 @@ import 'package:material_ui/material_ui.dart';
 
 import '../services/stats_history.dart';
 import 'perf.dart';
+import 'role_colors.dart';
 
 /// Cor de cada métrica, a mesma dos cartões do desempenho.
-Color metricColor(Metric m, ColorScheme scheme) => switch (m) {
-  Metric.cpu => scheme.primary,
-  Metric.gpu || Metric.vram => scheme.secondary,
-  Metric.mem => scheme.tertiary,
+Color metricColor(Metric m, RoleColors roles) => switch (m) {
+  Metric.cpu => roles.cpu,
+  Metric.gpu || Metric.vram => roles.gpu,
+  Metric.mem => roles.mem,
 };
 
 /// Folha com o gráfico dos últimos minutos; abre já com o que foi guardado
@@ -40,7 +41,7 @@ class _StatsSheetState extends State<StatsSheet> {
     return ListenableBuilder(
       listenable: h,
       builder: (context, _) {
-        final color = metricColor(_metric, scheme);
+        final color = metricColor(_metric, RoleColors.of(context));
         final points = h.series(_metric);
         final sum = h.summary(_metric);
         final muted = text.bodySmall?.copyWith(color: scheme.onSurfaceVariant);

@@ -13,11 +13,21 @@ void main() {
     expect(s.gruvbox, GruvboxVariant.soft);
     expect(s.catppuccin, CatppuccinFlavor.frappe);
     await s.setFamily(ThemeFamily.catppuccin);
-    expect(s.palettes!.$2, Palettes.catppuccinFrappe);
+    expect(s.palettes!.$2.name, Palettes.catppuccinFrappe.name);
+    expect(s.intensity, ThemeIntensity.soft);
     await s.setCatppuccin(CatppuccinFlavor.mocha);
+    await s.setAccent('peach');
+    await s.setIntensity(ThemeIntensity.vivid);
     final again = AppSettings();
     await again.load();
-    expect(again.palettes!.$2, Palettes.catppuccinMocha, reason: 'a escolha fica salva');
+    expect(again.palettes!.$2.name, Palettes.catppuccinMocha.name, reason: 'a escolha fica salva');
+    expect(
+      again.palettes!.$2.primary,
+      Palettes.catppuccinMocha.accents['peach'],
+      reason: 'destaque e intensidade salvos',
+    );
+    await again.setFamily(ThemeFamily.gruvbox);
+    expect(again.intensity, ThemeIntensity.soft, reason: 'Gruvbox Suave começa em Bem pastel');
   });
 
   for (final family in [ThemeFamily.gruvbox, ThemeFamily.catppuccin]) {

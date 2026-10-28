@@ -19,6 +19,8 @@ class AppSettings extends ChangeNotifier {
   static const _familyKey = 'theme_family', _modeKey = 'theme_mode';
   static const _gruvboxKey = 'theme_gruvbox', _catppuccinKey = 'theme_catppuccin';
   static const _gruvboxAccentKey = 'theme_gruvbox_accent', _catppuccinAccentKey = 'theme_catppuccin_accent';
+  static const _gruvboxIntensityKey = 'theme_gruvbox_intensity';
+  static const _catppuccinIntensityKey = 'theme_catppuccin_intensity';
 
   ThemeFamily family = ThemeFamily.dynamic;
   ThemeMode mode = ThemeMode.system;
@@ -30,12 +32,36 @@ class AppSettings extends ChangeNotifier {
   /// null usa o padrão (laranja no Gruvbox, verde no Suave, mauve no Catppuccin).
   String? gruvboxAccent, catppuccinAccent;
 
+  /// Intensidade escolhida; null usa o padrão (Bem pastel, ou Vivo no Gruvbox Original).
+  ThemeIntensity? gruvboxIntensity, catppuccinIntensity;
+
+  /// Intensidade em uso na família atual (a escolhida ou a padrão).
+  ThemeIntensity get intensity => switch (family) {
+    ThemeFamily.gruvbox => gruvboxIntensity ?? Palettes.defaultIntensity(gruvbox),
+    _ => catppuccinIntensity ?? ThemeIntensity.soft,
+  };
+
+  Future<void> setIntensity(ThemeIntensity i) async {
+    final String key;
+    if (family == ThemeFamily.gruvbox) {
+      gruvboxIntensity = i;
+      key = _gruvboxIntensityKey;
+    } else if (family == ThemeFamily.catppuccin) {
+      catppuccinIntensity = i;
+      key = _catppuccinIntensityKey;
+    } else {
+      return;
+    }
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setString(key, i.name);
+  }
+
   /// Paletas (clara, escura) da família escolhida; null no tema dinâmico.
   (Palette, Palette)? get palettes => switch (family) {
     ThemeFamily.dynamic => null,
     ThemeFamily.velksync => Palettes.velksync,
-    ThemeFamily.gruvbox => Palettes.gruvbox(gruvbox, gruvboxAccent),
-    ThemeFamily.catppuccin => Palettes.catppuccin(catppuccin, catppuccinAccent),
+    ThemeFamily.gruvbox => Palettes.gruvbox(gruvbox, gruvboxAccent, gruvboxIntensity),
+    ThemeFamily.catppuccin => Palettes.catppuccin(catppuccin, catppuccinAccent, catppuccinIntensity),
   };
 
   /// Destaques da família atual, para o seletor (vazio sem seletor).
@@ -68,6 +94,8 @@ class AppSettings extends ChangeNotifier {
     gruvbox = GruvboxVariant.values.asNameMap()[prefs.getString(_gruvboxKey)] ?? GruvboxVariant.soft;
     catppuccin = CatppuccinFlavor.values.asNameMap()[prefs.getString(_catppuccinKey)] ?? CatppuccinFlavor.frappe;
     gruvboxAccent = prefs.getString(_gruvboxAccentKey);
+    gruvboxIntensity = ThemeIntensity.values.asNameMap()[prefs.getString(_gruvboxIntensityKey)];
+    catppuccinIntensity = ThemeIntensity.values.asNameMap()[prefs.getString(_catppuccinIntensityKey)];
     catppuccinAccent = prefs.getString(_catppuccinAccentKey);
     notifyListeners();
   }
