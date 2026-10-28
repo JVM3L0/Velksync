@@ -213,6 +213,7 @@ func trayMenu(st trayState) []menuItem {
 	return append(items, sep,
 		menuItem{ID: menuNotices, Text: "Avisar o que os celulares fazem", Checked: st.Notices},
 		menuItem{ID: menuUpdateCheck, Text: "Procurar atualizações", Checked: st.UpdateCheck},
+		menuItem{ID: menuCheckUpdates, Text: "Procurar atualizações agora", Disabled: st.Updating},
 		menuItem{ID: menuLog, Text: "Abrir o log"},
 		menuItem{ID: menuConfig, Text: "Abrir a pasta da configuração"},
 		sep,

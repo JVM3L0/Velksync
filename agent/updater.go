@@ -218,10 +218,34 @@ func (u *updater) Check() {
 		u.announce()
 		return
 	}
-	r, err := u.fetch()
-	if err != nil {
+	if _, err := u.refresh(); err != nil {
 		log.Printf("atualização: %v", err)
 		return
+	}
+	u.announce()
+}
+
+// CheckNow consulta o GitHub na hora, mesmo com a checagem automática
+// desligada ou já feita hoje (o "Procurar atualizações agora").
+func (u *updater) CheckNow() (releaseInfo, bool, error) {
+	r, err := u.refresh()
+	if err != nil {
+		return releaseInfo{}, false, err
+	}
+	return r, versionNewer(r.Version(), version), nil
+}
+
+// Pending é a versão nova já conhecida, independente da checagem automática.
+func (u *updater) Pending() (releaseInfo, bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.latest, versionNewer(u.latest.Version(), version)
+}
+
+func (u *updater) refresh() (releaseInfo, error) {
+	r, err := u.fetch()
+	if err != nil {
+		return releaseInfo{}, err
 	}
 	r.Checked = u.now()
 	u.mu.Lock()
@@ -230,7 +254,7 @@ func (u *updater) Check() {
 	if data, err := json.Marshal(r); err == nil {
 		os.WriteFile(u.statePath, data, 0o600)
 	}
-	u.announce()
+	return r, nil
 }
 
 func (u *updater) announce() {

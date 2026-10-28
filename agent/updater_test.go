@@ -184,3 +184,27 @@ func TestReleaseNotes(t *testing.T) {
 		t.Errorf("%q", got)
 	}
 }
+
+func TestUpdaterCheckNowIgnoresScheduleAndSwitch(t *testing.T) {
+	u := newUpdater(filepath.Join(t.TempDir(), "config.json"), func() bool { return false }, nil)
+	calls := 0
+	u.fetch = func() (releaseInfo, error) { calls++; return releaseInfo{Tag: "v99.0.0"}, nil }
+	r, newer, err := u.CheckNow()
+	if err != nil || !newer || r.Version() != "99.0.0" || calls != 1 {
+		t.Fatalf("CheckNow = %v %v %v (consultas %d)", r, newer, err, calls)
+	}
+	u.CheckNow() // de novo na hora: o manual não espera o dia passar
+	if calls != 2 {
+		t.Errorf("consultas = %d", calls)
+	}
+	if _, ok := u.Available(); ok {
+		t.Error("Available deveria respeitar a checagem automática desligada")
+	}
+	if p, ok := u.Pending(); !ok || p.Version() != "99.0.0" {
+		t.Error("Pending deveria mostrar a versão achada")
+	}
+	u.fetch = func() (releaseInfo, error) { return releaseInfo{Tag: "v0.0.1"}, nil }
+	if _, newer, _ := u.CheckNow(); newer {
+		t.Error("versão antiga anunciada como nova")
+	}
+}

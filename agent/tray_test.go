@@ -107,7 +107,7 @@ func TestTrayMenu(t *testing.T) {
 		"Velksync 0.5.0, rodando", "192.168.3.5 · 1 celular conectado", "-",
 		"Parear um celular…", "Celulares pareados", "Conferir Wake-on-LAN…", "Histórico…", "-",
 		"Cancelar: desligar quando a mídia parar", "-",
-		"Avisar o que os celulares fazem", "Procurar atualizações", "Abrir o log", "Abrir a pasta da configuração", "-", "Sair do agente…",
+		"Avisar o que os celulares fazem", "Procurar atualizações", "Procurar atualizações agora", "Abrir o log", "Abrir a pasta da configuração", "-", "Sair do agente…",
 	}
 	if got := menuTexts(items); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("menu:\n%v\nqueria\n%v", got, want)

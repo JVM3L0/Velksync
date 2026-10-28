@@ -526,10 +526,12 @@ func (t *tray) state() trayState {
 	s.mu.Unlock()
 	st := trayState{Version: version, Devices: devices, Notices: notices, Schedule: s.schedule.Current(),
 		UpdateCheck: updateCheck}
-	if r, ok := s.updates.Available(); ok {
+	// Pending, não Available: a versão achada pelo "Procurar agora" aparece
+	// mesmo com a checagem automática desligada.
+	if r, ok := s.updates.Pending(); ok {
 		st.Update = r.Version()
-		st.Updating = t.updating.Load()
 	}
+	st.Updating = t.updating.Load()
 	if ip, err := lanIP(); err == nil {
 		st.IP = ip.String()
 	}
@@ -599,6 +601,8 @@ func (t *tray) command(cmd int) {
 		s.cfg.TrayNotices = &on
 		s.persist()
 		s.mu.Unlock()
+	case cmd == menuCheckUpdates:
+		go t.checkUpdatesNow()
 	case cmd == menuHistory:
 		go t.showHistory()
 	case cmd == menuUpdate:
@@ -957,6 +961,19 @@ func runElevated(file, args string, wait bool) (uint32, error) {
 	return code, err
 }
 
+// checkUpdatesNow procura versão nova na hora e oferece instalar.
+func (t *tray) checkUpdatesNow() {
+	r, newer, err := t.srv.updates.CheckNow()
+	switch {
+	case err != nil:
+		t.info("Não deu para procurar atualizações", err.Error())
+	case newer:
+		t.offerUpdate()
+	default:
+		t.info("Nenhuma atualização", "O Velksync "+version+" é a versão mais recente (última publicada: "+r.Version()+").")
+	}
+}
+
 // showHistory mostra as últimas ações (sem o terminal se ele estiver desligado).
 func (t *tray) showHistory() {
 	s := t.srv
@@ -983,7 +1000,7 @@ func (t *tray) offerUpdate() {
 	}
 	defer t.updating.Store(false)
 	u := t.srv.updates
-	r, ok := u.Available()
+	r, ok := u.Pending()
 	if !ok {
 		return
 	}
