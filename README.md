@@ -38,9 +38,31 @@ Baixe o `velksync-setup-<versão>-windows-amd64.exe` e o `SHA256SUMS` na [págin
 1. **Boas-vindas**: o que vai ser instalado (ou atualizado, se já houver uma instalação).
 2. **Wake-on-LAN**: confere cabo, "Wake on Magic Packet", a permissão da placa para ligar o PC, a Inicialização Rápida e se a rede está como Privada. Cada item com problema tem uma caixa "Corrigir"; nada muda sem ela marcada. A BIOS não dá para ver de dentro do Windows: veja a seção 1.
 3. **Dual boot**: primeira instalação ou "já instalei no Linux", com o token de lá (que vai por arquivo temporário, nunca pela linha de comando nem pelo log).
-4. **Pronto**: marque "Parear um celular agora" e escaneie o QR com o app. Uma janela avisa quando o celular parear.
+4. **Pronto**: marque "Parear um celular agora" e escaneie o QR com o app. A janela do QR fecha sozinha quando o celular parear.
 
-Para atualizar, abra o instalador da versão nova: a configuração e os celulares pareados continuam. Para remover, use **Configurações → Aplicativos → Velksync**; ele pergunta se você quer manter a configuração (assim, reinstalar não exige parear de novo).
+#### O que o instalador muda no PC
+
+Tudo isto é desfeito pelo desinstalador:
+
+| O quê | Onde | Para quê |
+|---|---|---|
+| Agente | `%LOCALAPPDATA%\Velksync\velksync-agent.exe` | Roda na sua sessão (ícone, mídia, comandos que abrem janelas). |
+| Tarefa **Velksync Agent** | Agendador de Tarefas, ao entrar no Windows, como o seu usuário | Sobe o agente sem janela; reinicia se cair. |
+| Sinal de presença | `%ProgramFiles%\Velksync\velksync-agent.exe` | Responde "estou ligado" antes do login. |
+| Tarefa **Velksync Presence** | Agendador de Tarefas, no boot, como `LocalService` (conta sem privilégios) | Sobe o sinal de presença antes de qualquer login. |
+| Segredo de presença | `%ProgramData%\Velksync\presence.json` | Só leitura para o `LocalService`; escrita só para Administradores. Nunca contém o token mestre. |
+| Firewall | Regras "Velksync TCP" (41100), "Velksync UDP" e "Velksync Presence UDP" (41101) | Entrada liberada só em rede **Privada** e só para a sub-rede local. |
+| Configuração | `%APPDATA%\velksync\config.json` | Token mestre e celulares pareados. Fica na atualização; na remoção, você escolhe. |
+| Wake-on-LAN (opcional) | Placa de rede, Inicialização Rápida, perfil da rede | Só os itens que você marcou em "Corrigir". |
+| Aplicativos | Configurações → Aplicativos → Velksync | Desinstalar. |
+
+O instalador não instala serviço do Windows, não mexe em outros programas e não manda nada para fora do PC.
+
+#### Atualizar
+
+O agente procura versão nova no GitHub **uma vez por dia** (desligue em **Procurar atualizações**, no menu do ícone, ou com `update_check: false`). Havendo, aparece um aviso e **Atualizar para X…** no menu do ícone. Ao confirmar, ele baixa o instalador e **só o executa se o `SHA256SUMS` estiver assinado pela chave das releases** (veja *Releases*) e o arquivo bater com ele; o Windows pede administrador e a atualização mantém a configuração e os celulares. O app também mostra "Agente X disponível no PC".
+
+Atualizar à mão continua valendo: abra o instalador da versão nova. Para remover, use **Configurações → Aplicativos → Velksync**; ele pergunta se você quer manter a configuração (assim, reinstalar não exige parear de novo).
 
 > **"O Windows protegeu o computador"**: o instalador não tem assinatura de código paga, então o SmartScreen avisa. Confira o arquivo antes (`(Get-FileHash .\velksync-setup-*.exe).Hash.ToLower()` deve bater com a linha dele no `SHA256SUMS`) e clique em *Mais informações → Executar assim mesmo*.
 
@@ -93,6 +115,7 @@ Reinicie o agente depois de editar a config.
 
 - `commands`: aparecem como botões no app. Um comando sem variante para o SO atual fica escondido.
 - `power_grace_seconds` (padrão 10, só Windows): com a sessão desbloqueada, desligar, reiniciar ou suspender pelo celular mostra uma contagem no PC, e quem está nele pode cancelar. Com a tela bloqueada, executa na hora. `0` desliga a contagem.
+- `update_check` (padrão `true`): procurar versão nova no GitHub uma vez por dia. Também muda pelo menu do ícone.
 - `tray_notices` (padrão `true`, só Windows): avisos quando um celular pareia, roda um comando ou agenda o desligamento. Também muda pelo menu do ícone.
 - `media_idle_minutes` (padrão 10): mídia pausada há mais que isso some do app e volta quando tocar de novo. Navegadores congelam abas paradas há muito tempo: o play é aceito, mas o vídeo não toca. `0` desliga.
 - `allow_shell: true`: libera o **terminal livre** no app. Qualquer celular pareado roda qualquer coisa como seu usuário; deixe desligado se não usar. No Windows os comandos rodam via `cmd.exe`; no Linux, via `/bin/sh`.
@@ -164,6 +187,10 @@ O agente mostra o ícone do Velksync perto do relógio. Pelo menu (botão direit
 
 Quando um celular pede para desligar, reiniciar ou suspender com alguém usando o PC (sessão desbloqueada), aparece uma contagem de 10 s com **Cancelar** (o botão padrão) e **Desligar agora**. Se alguém cancela, o celular recebe o aviso. Com a tela bloqueada, executa na hora.
 
+## 8.2 Atualizar o app
+
+O app procura versão nova uma vez por dia, ao abrir (desligue em **Configurações → Atualizações**). Havendo, aparece um cartão no topo da lista de PCs: **Atualizar** baixa o APK do processador do celular, só do GitHub e por HTTPS, confere com o `SHA256SUMS` e abre o instalador do Android. Na primeira vez o Android pede para liberar "Instalar apps desta fonte" para o Velksync. O Android só instala por cima um APK assinado com a mesma chave do app instalado, então um arquivo trocado é recusado por ele também. O app de desenvolvimento ("Velksync Dev") não se atualiza.
+
 ## 9. Rodar o app
 
 ```sh
@@ -192,7 +219,7 @@ Use um **celular de verdade no mesmo Wi-Fi**. O emulador Android fica atrás de 
 
 ## Releases
 
-Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APKs assinados, um por processador (no celular, baixe o **`-arm64.apk`**; aparelhos antigos, o `-armv7.apk`), agente para Linux (`.tar.gz`) e Windows (instalador `velksync-setup-….exe` e `.zip`), `SHA256SUMS` e atestado de proveniência (repositórios públicos). A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
+Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APKs assinados, um por processador (no celular, baixe o **`-arm64.apk`**; aparelhos antigos, o `-armv7.apk`), agente para Linux (`.tar.gz`) e Windows (instalador `velksync-setup-….exe` e `.zip`), `SHA256SUMS`, `SHA256SUMS.sig` (assinatura Ed25519, que o atualizador do agente exige) e atestado de proveniência (repositórios públicos). As novidades da página vêm da seção da versão no `CHANGELOG.md`. A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
 
 Configuração única da chave de assinatura do app:
 
@@ -203,6 +230,18 @@ base64 -w0 velksync-release.jks   # conteúdo do secret ANDROID_KEYSTORE_BASE64
 ```
 
 Em *Settings → Secrets and variables → Actions* do repositório, crie `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`velksync`) e `ANDROID_KEY_PASSWORD` (com PKCS12, a mesma senha da keystore). **Guarde o `.jks` e a senha num backup seguro**: sem eles não dá para publicar atualizações que o Android aceite por cima da versão instalada. Nunca coloque o `.jks` no repositório (o `.gitignore` bloqueia).
+
+### Chave de assinatura das releases
+
+Configuração única. A chave privada nunca entra no repositório:
+
+```sh
+openssl genpkey -algorithm ed25519 -out ~/velksync-release-signing.pem && chmod 600 ~/velksync-release-signing.pem
+openssl pkey -in ~/velksync-release-signing.pem -pubout -out agent/release_key.pem   # pública, vai no repositório
+base64 -w0 ~/velksync-release-signing.pem                                            # Secret RELEASE_SIGNING_KEY
+```
+
+A release assina o `SHA256SUMS` e confere com `agent/release_key.pem` antes de publicar. **Guarde a chave privada num backup seguro**: sem ela, os agentes instalados recusam as próximas atualizações automáticas (atualizar à mão continua funcionando).
 
 ## Segurança
 
@@ -215,6 +254,7 @@ Em *Settings → Secrets and variables → Actions* do repositório, crie `ANDRO
 | Servidor | Limites de tempo de leitura e de cabeçalho; no máximo 3 canais ao vivo por celular. |
 | Presença | Desafio-resposta com HMAC e segredo próprio (derivado do token mestre); processo sem privilégios, sandbox no Linux, limite de respostas por IP. |
 | Bandeja (Windows) | Nenhuma porta nova: o menu faz o que a linha de comando já faz, como o seu usuário. A contagem antes de desligar só se cancela no próprio PC. Avisos mostram o nome do celular e do comando, nunca a saída. |
+| Atualizações | Agente e app só baixam do GitHub por HTTPS, com limite de tamanho. O agente só roda o instalador se o `SHA256SUMS` tiver a assinatura Ed25519 das releases e o arquivo bater; o Android só aceita APK com a mesma assinatura do app. Nada é instalado sem a pessoa confirmar no próprio aparelho. |
 | Widget e atalho | Só nome, MAC e estado; desligar sempre passa pelo app e pede confirmação. Componentes internos não exportados. |
 | Rede | Firewall liberado só para a sub-rede local (Windows: rede privada; Linux: `ufw`). |
 | Celular | Credenciais no Android Keystore (`flutter_secure_storage`), backup e transferência entre aparelhos desligados, sem HTTP em texto puro. |
