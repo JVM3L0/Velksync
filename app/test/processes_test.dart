@@ -56,7 +56,7 @@ void main() {
     expect(find.text('18%'), findsOneWidget);
     expect(find.textContaining('231 processos'), findsOneWidget);
 
-    await tester.tap(find.text('Memória'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Memória'));
     await tester.pump();
     expect(find.textContaining('Code.exe'), findsOneWidget);
     expect(find.text('2.5%'), findsOneWidget);
@@ -169,5 +169,42 @@ void main() {
     await tester.pump();
     expect(find.widgetWithText(ChoiceChip, 'GPU'), findsNothing);
     expect(find.textContaining('bash'), findsOneWidget, reason: 'sem GPU, volta para CPU');
+  });
+
+  testWidgets('colunas com cabeçalho e sempre na mesma ordem', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    Future<ProcessList> load() async => const ProcessList(
+      byCpu: [ProcessInfo(name: 'chrome.exe', cpu: 18, mem: 900 << 20)],
+      byMem: [ProcessInfo(name: 'chrome.exe', cpu: 18, mem: 900 << 20)],
+      byGpu: [ProcessInfo(name: 'game.exe', gpu: 70, vram: 300 << 20)],
+      byVram: [ProcessInfo(name: 'game.exe', gpu: 70, vram: 300 << 20)],
+      total: 2,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(child: ProcessesSection(load: load)),
+        ),
+      ),
+    );
+    await tester.pump();
+    double x(String t) => tester.getCenter(find.text(t)).dx;
+
+    expect(find.text('CPU ▼'), findsOneWidget);
+    expect(find.text('Memória'), findsNWidgets(2), reason: 'cabeçalho e chip');
+    expect(x('18%'), lessThan(x('900 MB')), reason: 'CPU antes de Memória');
+    final cpuX = x('18%');
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Memória'));
+    await tester.pump();
+    expect(find.text('Memória ▼'), findsOneWidget);
+    expect(x('18%'), cpuX, reason: 'a coluna da CPU não muda de lugar');
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'VRAM'));
+    await tester.pump();
+    expect(find.text('VRAM ▼'), findsOneWidget);
+    expect(x('70%'), lessThan(x('300 MB')), reason: 'GPU antes de VRAM');
   });
 }

@@ -92,13 +92,16 @@ class _ProcessesSectionState extends State<ProcessesSection> {
   /// Abaixo de 1 GB em MB: um programa costuma usar centenas de MB.
   static String _size(int bytes) => bytes >= 1 << 30 ? formatBytes(bytes) : '${(bytes / (1 << 20)).round()} MB';
 
-  /// O valor do filtro (em destaque) e um vizinho de contexto: CPU com
-  /// memória, GPU com VRAM.
-  static (String, String) _values(ProcessInfo p, ProcessSort s) => switch (s) {
-    ProcessSort.cpu => (_pct(p.cpu), _size(p.mem)),
-    ProcessSort.mem => (_size(p.mem), _pct(p.cpu)),
-    ProcessSort.gpu => (_pct(p.gpu), _size(p.vram)),
-    ProcessSort.vram => (_size(p.vram), _pct(p.gpu)),
+  /// As duas colunas, sempre na mesma ordem: CPU e Memória, ou GPU e VRAM.
+  static (ProcessSort, ProcessSort) _columns(ProcessSort s) => s == ProcessSort.gpu || s == ProcessSort.vram
+      ? (ProcessSort.gpu, ProcessSort.vram)
+      : (ProcessSort.cpu, ProcessSort.mem);
+
+  static String _value(ProcessInfo p, ProcessSort c) => switch (c) {
+    ProcessSort.cpu => _pct(p.cpu),
+    ProcessSort.mem => _size(p.mem),
+    ProcessSort.gpu => _pct(p.gpu),
+    ProcessSort.vram => _size(p.vram),
   };
 
   @override
@@ -133,6 +136,27 @@ class _ProcessesSectionState extends State<ProcessesSection> {
             ),
             (final l?, _) => Column(
               children: [
+                // Cabeçalho: o que é cada coluna e qual está ordenando.
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 2),
+                  child: Row(
+                    children: [
+                      const Spacer(),
+                      for (final c in [_columns(sort).$1, _columns(sort).$2])
+                        SizedBox(
+                          width: 84,
+                          child: Text(
+                            c == sort ? '${c.label} ▼' : c.label,
+                            textAlign: TextAlign.end,
+                            style: text.labelMedium?.copyWith(
+                              color: c == sort ? accent : scheme.onSurfaceVariant,
+                              fontWeight: c == sort ? FontWeight.w700 : null,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 for (final p in _items(l, sort))
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 7),
@@ -155,26 +179,19 @@ class _ProcessesSectionState extends State<ProcessesSection> {
                             style: text.bodyMedium,
                           ),
                         ),
-                        SizedBox(
-                          width: 76,
-                          child: Text(
-                            _values(p, sort).$1,
-                            textAlign: TextAlign.end,
-                            style: text.bodyMedium?.copyWith(
-                              fontFeatures: tabular,
-                              color: accent,
-                              fontWeight: FontWeight.w600,
+                        for (final c in [_columns(sort).$1, _columns(sort).$2])
+                          SizedBox(
+                            width: 84,
+                            child: Text(
+                              _value(p, c),
+                              textAlign: TextAlign.end,
+                              style: text.bodyMedium?.copyWith(
+                                fontFeatures: tabular,
+                                color: c == sort ? accent : scheme.onSurfaceVariant,
+                                fontWeight: c == sort ? FontWeight.w600 : null,
+                              ),
                             ),
                           ),
-                        ),
-                        SizedBox(
-                          width: 76,
-                          child: Text(
-                            _values(p, sort).$2,
-                            textAlign: TextAlign.end,
-                            style: text.bodyMedium?.copyWith(fontFeatures: tabular, color: scheme.onSurfaceVariant),
-                          ),
-                        ),
                       ],
                     ),
                   ),
