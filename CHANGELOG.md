@@ -3,6 +3,21 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.1] - 2026-10-27
+
+### Alterado
+- Temas Gruvbox e Catppuccin mais fiéis às paletas (guia de estilo do
+  Catppuccin, Mihon e Zed como referência): fundo da tela no tom mais
+  escuro, cartões no fundo padrão, botões e destaques na cor pura com texto
+  escuro, chips neutros com o símbolo no destaque. Os contêineres não
+  ficam mais oliva ou rosados.
+- Seletor de destaque em Configurações → Tema: nove cores no Catppuccin e
+  cinco no Gruvbox (padrão laranja; verde no Gruvbox Suave).
+
+### Corrigido
+- A ação do snackbar ("Desfazer") ficava ilegível; agora o snackbar usa o
+  tema oposto, com contraste garantido.
+
 ## [0.6.0] - 2026-10-27
 
 ### Adicionado
