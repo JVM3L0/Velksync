@@ -3,7 +3,7 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.8.0] - 2026-10-28
 
 ### Adicionado
 - Histórico de ações: o agente guarda as últimas 200 (energia, cancelamentos
@@ -16,8 +16,10 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
   abre no navegador do PC, outro texto vai para a área de transferência.
 - "Procurar atualizações agora" no menu do ícone e "Procurar agora" em
   Configurações do app.
-- Processos na aba Desempenho: os 10 programas que mais usam CPU ou
-  memória, somando os processos de cada um. Só leitura.
+- Processos: os 10 programas que mais usam CPU, GPU, VRAM ou memória
+  (GPU e VRAM no Windows), somando os processos de cada um, na janela do
+  gráfico (alterna Gráfico | Processos, com os mesmos filtros embaixo) ou
+  pelo botão "Ver processos" da aba Desempenho. Só leitura.
 - Primeira vez guiada: o que é, instalar o agente, parear e testar o Ligar
   (com dicas se não funcionar). Só sem PC cadastrado; dá para pular.
 - O widget da tela inicial segue o tema do app (Android 12+); com o tema
