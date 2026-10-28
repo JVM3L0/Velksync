@@ -235,3 +235,14 @@ func TestPowerGraceConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestTrayMenuUpdate(t *testing.T) {
+	ready := trayMenu(trayState{Version: "0.6.1", Update: "0.6.2"})
+	if ready[2].ID != menuUpdate || ready[2].Text != "Atualizar para 0.6.2…" || ready[2].Disabled {
+		t.Errorf("com versão nova: %+v", ready[2])
+	}
+	busy := trayMenu(trayState{Version: "0.6.1", Update: "0.6.2", Updating: true})
+	if busy[2].ID != 0 || !busy[2].Disabled || busy[2].Text != "Atualizando para 0.6.2…" {
+		t.Errorf("atualizando: o item deveria estar desativado: %+v", busy[2])
+	}
+}

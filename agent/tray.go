@@ -161,6 +161,7 @@ type trayState struct {
 	Notices  bool
 	// Update é a versão nova disponível ("" sem novidade).
 	Update      string
+	Updating    bool // baixando ou instalando: o item fica desativado
 	UpdateCheck bool
 }
 
@@ -192,7 +193,11 @@ func trayMenu(st trayState) []menuItem {
 
 	items := append(status, sep)
 	if st.Update != "" {
-		items = append(items, menuItem{ID: menuUpdate, Text: "Atualizar para " + st.Update + "…"}, sep)
+		if st.Updating {
+			items = append(items, menuItem{Text: "Atualizando para " + st.Update + "…", Disabled: true}, sep)
+		} else {
+			items = append(items, menuItem{ID: menuUpdate, Text: "Atualizar para " + st.Update + "…"}, sep)
+		}
 	}
 	items = append(items,
 		menuItem{ID: menuPair, Text: "Parear um celular…"},

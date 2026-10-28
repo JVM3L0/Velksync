@@ -5,13 +5,26 @@
 param([string]$Token = "", [string]$TokenFile = "", [string]$LogFile = "")
 $ErrorActionPreference = "Stop"
 if ($LogFile) { Start-Transcript -Path $LogFile -Force | Out-Null }
+
+# O processo encerrado pode segurar o .exe por alguns segundos (e o antivírus
+# também lê arquivos novos): tenta de novo antes de desistir.
+function Copy-Retry([string]$from, [string]$to) {
+    for ($i = 1; ; $i++) {
+        try { Copy-Item $from $to -Force; return }
+        catch [System.IO.IOException] {
+            if ($i -ge 10) { throw }
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
 $dir = Join-Path $env:LOCALAPPDATA "Velksync"
 $exe = Join-Path $dir "velksync-agent.exe"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 Get-ScheduledTask -TaskName "Velksync Agent" -ErrorAction SilentlyContinue | Stop-ScheduledTask
 # Stop-ScheduledTask não espera o processo sair; sem isso o .exe continua em uso.
 Get-Process velksync-agent -ErrorAction SilentlyContinue | Stop-Process -Force -PassThru | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
-Copy-Item (Join-Path $PSScriptRoot "velksync-agent.exe") $exe -Force
+Copy-Retry (Join-Path $PSScriptRoot "velksync-agent.exe") $exe
 
 $cfg = Join-Path $env:APPDATA "velksync\config.json"
 if (-not (Test-Path $cfg)) {
@@ -39,7 +52,7 @@ $pfile = Join-Path $pdata "presence.json"
 Get-ScheduledTask -TaskName "Velksync Presence" -ErrorAction SilentlyContinue | Stop-ScheduledTask
 Get-Process velksync-agent -ErrorAction SilentlyContinue | Where-Object Path -eq $pexe | Stop-Process -Force -PassThru | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $pdir, $pdata | Out-Null
-Copy-Item (Join-Path $PSScriptRoot "velksync-agent.exe") $pexe -Force
+Copy-Retry (Join-Path $PSScriptRoot "velksync-agent.exe") $pexe
 # Pasta do segredo: só SYSTEM e Administradores escrevem; LocalService só lê.
 icacls $pdata /inheritance:r /grant:r "*S-1-5-18:(OI)(CI)F" "*S-1-5-32-544:(OI)(CI)F" "*S-1-5-19:(OI)(CI)R" | Out-Null
 # O .exe é GUI: sem -Wait o PowerShell não espera ele terminar.

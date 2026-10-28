@@ -44,6 +44,8 @@ Compression=lzma2/max
 SolidCompression=yes
 ; O script para o agente sozinho antes de trocar o .exe.
 CloseApplications=no
+; Um instalador por vez: dois ao mesmo tempo brigam pelo mesmo .exe.
+SetupMutex=VelksyncSetup,Global\VelksyncSetup
 SetupLogging=yes
 
 [Languages]

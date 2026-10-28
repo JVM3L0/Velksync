@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -333,6 +334,7 @@ type tray struct {
 	shown          bool
 	menuDevices    []PairedDevice
 	pair           *pairWindow
+	updating       atomic.Bool
 }
 
 var theTray *tray
@@ -526,6 +528,7 @@ func (t *tray) state() trayState {
 		UpdateCheck: updateCheck}
 	if r, ok := s.updates.Available(); ok {
 		st.Update = r.Version()
+		st.Updating = t.updating.Load()
 	}
 	if ip, err := lanIP(); err == nil {
 		st.IP = ip.String()
@@ -953,6 +956,12 @@ func runElevated(file, args string, wait bool) (uint32, error) {
 // offerUpdate mostra as novidades e, se a pessoa quiser, baixa o instalador,
 // confere a assinatura e o roda. O instalador para este agente e sobe o novo.
 func (t *tray) offerUpdate() {
+	// Um clique de cada vez: o download leva alguns segundos sem janela, e
+	// dois instaladores juntos brigam pelo mesmo .exe.
+	if !t.updating.CompareAndSwap(false, true) {
+		return
+	}
+	defer t.updating.Store(false)
 	u := t.srv.updates
 	r, ok := u.Available()
 	if !ok {
