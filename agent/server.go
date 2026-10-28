@@ -29,6 +29,7 @@ type Server struct {
 	schedule   *Scheduler
 	ui         desktop
 	updates    *updater
+	history    *History
 	notices    *noticeBatcher
 	mu         sync.Mutex // protege cfg.Devices, cfg.Revoked e cfg.TrayNotices
 }
@@ -46,12 +47,16 @@ func (s *Server) routes() http.Handler {
 	if s.ui == nil {
 		s.ui = noDesktop{}
 	}
+	if s.history == nil {
+		s.history = newHistory(s.configPath)
+	}
 	if s.notices == nil {
 		s.notices = newNoticeBatcher(func(title, text string) { s.ui.Notify(title, text) })
 	}
 	if s.schedule == nil {
 		s.schedule = newScheduler(func(action string) {
 			if s.confirmPower(action, "O agendamento") {
+				s.history.Add("O agendamento", histPower, pastVerb(action)+" o PC", false)
 				runPower(action)
 			}
 		}, func(text string) {
@@ -65,6 +70,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/devices", masterOnly(s.listDevices))
 	mux.HandleFunc("POST /api/devices/revoke", masterOnly(s.revokeDevice))
 	mux.HandleFunc("GET /api/info", s.info)
+	mux.HandleFunc("GET /api/history", s.historyList)
 	mux.HandleFunc("GET /api/stats", s.stats)
 	mux.HandleFunc("GET /api/presence", s.presenceKey)
 	mux.HandleFunc("GET /api/media", s.mediaState)
@@ -148,7 +154,7 @@ func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 		"mac":         macFor(addrIP(local), false),
 		"allow_shell": s.cfg.AllowShell,
 		// O app usa o que existir aqui e cai no comportamento antigo no resto.
-		"features": []string{"live", "presence", "schedule"},
+		"features": []string{"live", "presence", "schedule", "history"},
 		"schedule": s.schedule.Current(),
 		"update":   s.updateInfo(),
 	})
@@ -195,15 +201,17 @@ func (s *Server) power(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		if grace > 0 {
 			if !s.ui.AskPower(req.Action, by, grace) {
-				s.powerCancelled(req.Action)
+				s.powerCancelled(req.Action, by)
 				return
 			}
 		} else {
 			// Dá tempo da resposta chegar no celular antes da máquina cair.
 			time.Sleep(500 * time.Millisecond)
 		}
+		s.history.Add(by, histPower, pastVerb(req.Action)+" o PC", false)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("falha em %s: %v %s", req.Action, err, out)
+			s.history.Add(by, histPower, "não conseguiu "+powerVerb(req.Action)+" o PC", true)
 		}
 	}()
 }
@@ -215,12 +223,13 @@ func (s *Server) confirmPower(action, by string) bool {
 	if grace == 0 || !s.ui.Present() || s.ui.AskPower(action, by, grace) {
 		return true
 	}
-	s.powerCancelled(action)
+	s.powerCancelled(action, by)
 	return false
 }
 
-func (s *Server) powerCancelled(action string) {
+func (s *Server) powerCancelled(action, by string) {
 	log.Printf("energia: %s cancelado no PC", action)
+	s.history.Add("Este PC", histPower, fmt.Sprintf("cancelou %s (pedido de %s)", powerVerb(action), by), false)
 	s.hub.Publish(Event{Type: "notify", Text: fmt.Sprintf("Cancelado no PC: ele não vai %s.", powerVerb(action))})
 }
 
@@ -268,8 +277,11 @@ func (s *Server) runCommand(w http.ResponseWriter, r *http.Request) {
 	for _, c := range s.cfg.Commands {
 		if c.ID == id && c.ForCurrentOS() != "" {
 			log.Printf("comando %q (pedido de %s)", id, r.RemoteAddr)
-			s.notice(s.deviceName(clientOf(r)), fmt.Sprintf("rodou \"%s\"", clip(c.Name, 60)))
-			writeJSON(w, http.StatusOK, s.execute(r.Context(), c.ForCurrentOS()))
+			by := s.deviceName(clientOf(r))
+			s.notice(by, fmt.Sprintf("rodou \"%s\"", clip(c.Name, 60)))
+			res := s.execute(r.Context(), c.ForCurrentOS())
+			s.history.Add(by, histCommand, fmt.Sprintf("rodou \"%s\"", clip(c.Name, 60)), res.ExitCode != 0)
+			writeJSON(w, http.StatusOK, res)
 			return
 		}
 	}
@@ -289,8 +301,11 @@ func (s *Server) shell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("shell %q (pedido de %s)", req.Command, r.RemoteAddr)
-	s.notice(s.deviceName(clientOf(r)), "rodou no terminal: "+clip(req.Command, 80))
-	writeJSON(w, http.StatusOK, s.execute(r.Context(), req.Command))
+	by := s.deviceName(clientOf(r))
+	s.notice(by, "rodou no terminal: "+clip(req.Command, 80))
+	res := s.execute(r.Context(), req.Command)
+	s.history.Add(by, histShell, "rodou no terminal: "+clip(req.Command, 80), res.ExitCode != 0)
+	writeJSON(w, http.StatusOK, res)
 }
 
 type limitedBuffer struct{ bytes.Buffer }

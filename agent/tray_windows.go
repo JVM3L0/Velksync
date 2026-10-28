@@ -590,6 +590,7 @@ func (t *tray) command(cmd int) {
 	case cmd == menuCancelSchedule:
 		if p := s.schedule.Current(); p != nil && s.schedule.Cancel() {
 			log.Printf("energia agendada cancelada no PC")
+			s.history.Add("Este PC", histSchedule, "cancelou o agendamento", false)
 			s.hub.Publish(Event{Type: "notify", Text: "Cancelado no PC: " + scheduleText(p) + "."})
 		}
 	case cmd == menuNotices:
@@ -598,6 +599,8 @@ func (t *tray) command(cmd int) {
 		s.cfg.TrayNotices = &on
 		s.persist()
 		s.mu.Unlock()
+	case cmd == menuHistory:
+		go t.showHistory()
 	case cmd == menuUpdate:
 		go t.offerUpdate()
 	case cmd == menuUpdateCheck:
@@ -859,6 +862,7 @@ func (t *tray) confirmRevoke(d PairedDevice) {
 	}
 	ids := t.srv.revoke(d.ID)
 	log.Printf("revogado no PC: %v", ids)
+	t.srv.history.Add("Este PC", histRevoke, "revogou "+d.Name, false)
 	t.Notify("Celular revogado", d.Name)
 }
 
@@ -953,6 +957,22 @@ func runElevated(file, args string, wait bool) (uint32, error) {
 	return code, err
 }
 
+// showHistory mostra as últimas ações (sem o terminal se ele estiver desligado).
+func (t *tray) showHistory() {
+	s := t.srv
+	entries := s.history.List(15, s.cfg.AllowShell)
+	content := "Nada por enquanto."
+	if len(entries) > 0 {
+		now := time.Now()
+		lines := make([]string, len(entries))
+		for i, e := range entries {
+			lines[i] = historyLine(e, now)
+		}
+		content = strings.Join(lines, "\n")
+	}
+	t.info("Histórico", content)
+}
+
 // offerUpdate mostra as novidades e, se a pessoa quiser, baixa o instalador,
 // confere a assinatura e o roda. O instalador para este agente e sobe o novo.
 func (t *tray) offerUpdate() {
@@ -989,6 +1009,7 @@ func (t *tray) offerUpdate() {
 		path := filepath.Join(dir, name)
 		if err = os.WriteFile(path, data, 0o600); err == nil {
 			log.Printf("atualização: instalando %s (assinatura conferida)", r.Version())
+			t.srv.history.Add("Este PC", histUpdate, "instalou a versão "+r.Version(), false)
 			_, err = runElevated(path, "/SILENT /SUPPRESSMSGBOXES /NORESTART", false)
 		}
 	}

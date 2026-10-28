@@ -140,6 +140,8 @@ const (
 	menuQuit
 	menuUpdate
 	menuUpdateCheck
+	menuHistory
+	menuCheckUpdates
 	menuRevokeBase = 1000 // + índice do celular em trayState.Devices
 )
 
@@ -203,6 +205,7 @@ func trayMenu(st trayState) []menuItem {
 		menuItem{ID: menuPair, Text: "Parear um celular…"},
 		devices,
 		menuItem{ID: menuDoctor, Text: "Conferir Wake-on-LAN…"},
+		menuItem{ID: menuHistory, Text: "Histórico…"},
 	)
 	if st.Schedule != nil {
 		items = append(items, sep, menuItem{ID: menuCancelSchedule, Text: "Cancelar: " + scheduleText(st.Schedule)})

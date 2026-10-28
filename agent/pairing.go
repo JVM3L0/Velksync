@@ -107,6 +107,7 @@ func (s *Server) pairClaim(w http.ResponseWriter, r *http.Request) {
 	s.addDevice(id, name)
 	log.Printf("pareado: %s (%s) de %s", name, id, r.RemoteAddr)
 	s.notice("Novo celular pareado", name)
+	s.history.Add(name, histPair, "foi pareado", false)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"device_id": id,
 		"token":     deviceToken(s.cfg.Token, id),

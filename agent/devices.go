@@ -113,6 +113,7 @@ func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("revogado: %v", ids)
+	s.history.Add("Este PC", histRevoke, "revogou "+req.Target, false)
 	writeJSON(w, http.StatusOK, map[string]any{"revoked": ids})
 }
 

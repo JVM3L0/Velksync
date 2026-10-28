@@ -233,7 +233,9 @@ func (s *Server) schedulePower(w http.ResponseWriter, r *http.Request, action st
 		return
 	}
 	log.Printf("energia agendada: %+v (pedido de %s)", *p, r.RemoteAddr)
-	s.notice(s.deviceName(clientOf(r)), "agendou "+scheduleText(p))
+	by := s.deviceName(clientOf(r))
+	s.notice(by, "agendou "+scheduleText(p))
+	s.history.Add(by, histSchedule, "agendou "+scheduleText(p), false)
 	writeJSON(w, http.StatusAccepted, p)
 }
 
@@ -244,5 +246,6 @@ func (s *Server) cancelSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("energia agendada cancelada por %s", r.RemoteAddr)
+	s.history.Add(s.deviceName(clientOf(r)), histSchedule, "cancelou o agendamento", false)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

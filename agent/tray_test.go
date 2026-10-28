@@ -105,7 +105,7 @@ func TestTrayMenu(t *testing.T) {
 	})
 	want := []string{
 		"Velksync 0.5.0, rodando", "192.168.3.5 · 1 celular conectado", "-",
-		"Parear um celular…", "Celulares pareados", "Conferir Wake-on-LAN…", "-",
+		"Parear um celular…", "Celulares pareados", "Conferir Wake-on-LAN…", "Histórico…", "-",
 		"Cancelar: desligar quando a mídia parar", "-",
 		"Avisar o que os celulares fazem", "Procurar atualizações", "Abrir o log", "Abrir a pasta da configuração", "-", "Sair do agente…",
 	}
@@ -116,7 +116,7 @@ func TestTrayMenu(t *testing.T) {
 	if len(devices) != 2 || devices[1].Text != "Galaxy · desde 25/10/2026" || devices[1].Sub[0].ID != menuRevokeBase+1 {
 		t.Errorf("celulares: %+v", devices)
 	}
-	if !items[9].Checked || !items[0].Disabled {
+	if !items[10].Checked || !items[0].Disabled {
 		t.Error("marcação ou status errados")
 	}
 
@@ -127,7 +127,7 @@ func TestTrayMenu(t *testing.T) {
 			t.Errorf("sem %q em %s", want, texts)
 		}
 	}
-	if strings.Contains(texts, "Cancelar:") || empty[9].Checked {
+	if strings.Contains(texts, "Cancelar:") || empty[10].Checked {
 		t.Errorf("sem agendamento e avisos desligados: %s", texts)
 	}
 }
