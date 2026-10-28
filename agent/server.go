@@ -361,7 +361,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	ch := s.hub.Subscribe()
+	ch := s.hub.Subscribe(clientOf(r))
 	defer s.hub.Unsubscribe(ch)
 	log.Printf("app conectado aos eventos: %s", r.RemoteAddr)
 	fmt.Fprint(w, ": conectado\n\n")

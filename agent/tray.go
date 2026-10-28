@@ -143,6 +143,7 @@ const (
 	menuHistory
 	menuCheckUpdates
 	menuRevokeBase = 1000 // + índice do celular em trayState.Devices
+	menuSendBase   = 2000 // + índice do celular em trayState.SendTargets
 )
 
 type menuItem struct {
@@ -162,8 +163,13 @@ type trayState struct {
 	Schedule *PowerSchedule
 	Notices  bool
 	// Update é a versão nova disponível ("" sem novidade).
-	Update      string
-	Updating    bool // baixando ou instalando: o item fica desativado
+	Update   string
+	Updating bool // baixando ou instalando: o item fica desativado
+
+	// Enviar para o celular: o que está copiado e quem está com o app aberto.
+	SendPreview string
+	SendReady   bool
+	SendTargets []string
 	UpdateCheck bool
 }
 
@@ -201,7 +207,15 @@ func trayMenu(st trayState) []menuItem {
 			items = append(items, menuItem{ID: menuUpdate, Text: "Atualizar para " + st.Update + "…"}, sep)
 		}
 	}
+	send := menuItem{Text: "Enviar para o celular", Sub: []menuItem{{Text: st.SendPreview, Disabled: true}, sep}}
+	for i, name := range st.SendTargets {
+		send.Sub = append(send.Sub, menuItem{ID: menuSendBase + i, Text: name, Disabled: !st.SendReady})
+	}
+	if len(st.SendTargets) == 0 {
+		send.Sub = append(send.Sub, menuItem{Text: "Nenhum celular com o app aberto", Disabled: true})
+	}
 	items = append(items,
+		send,
 		menuItem{ID: menuPair, Text: "Parear um celular…"},
 		devices,
 		menuItem{ID: menuDoctor, Text: "Conferir Wake-on-LAN…"},

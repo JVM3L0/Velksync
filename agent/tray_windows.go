@@ -335,6 +335,8 @@ type tray struct {
 	menuDevices    []PairedDevice
 	pair           *pairWindow
 	updating       atomic.Bool
+	menuClip       string   // texto copiado quando o menu abriu
+	menuSendIDs    []string // celulares do submenu "Enviar para o celular"
 }
 
 var theTray *tray
@@ -532,6 +534,15 @@ func (t *tray) state() trayState {
 		st.Update = r.Version()
 	}
 	st.Updating = t.updating.Load()
+	// O que está copiado agora: o menu mostra e o envio usa o mesmo texto.
+	t.menuClip, _ = readClipboard()
+	st.SendPreview = clipPreview(t.menuClip)
+	_, err := clipEvent(t.menuClip)
+	st.SendReady = err == nil
+	t.menuSendIDs = s.hub.Clients()
+	for _, id := range t.menuSendIDs {
+		st.SendTargets = append(st.SendTargets, s.deviceName(id))
+	}
 	if ip, err := lanIP(); err == nil {
 		st.IP = ip.String()
 	}
@@ -622,6 +633,8 @@ func (t *tray) command(cmd int) {
 		shellOpen(filepath.Dir(s.configPath))
 	case cmd == menuQuit:
 		go t.confirmQuit()
+	case cmd >= menuSendBase && cmd-menuSendBase < len(t.menuSendIDs):
+		t.sendToPhone(t.menuSendIDs[cmd-menuSendBase], t.menuClip)
 	case cmd >= menuRevokeBase && cmd-menuRevokeBase < len(t.menuDevices):
 		d := t.menuDevices[cmd-menuRevokeBase]
 		go t.confirmRevoke(d)
@@ -959,6 +972,29 @@ func runElevated(file, args string, wait bool) (uint32, error) {
 	var code uint32
 	err := windows.GetExitCodeProcess(sei.Process, &code)
 	return code, err
+}
+
+// sendToPhone manda o texto copiado (ou o link, que abre no navegador) para
+// um celular com o app aberto.
+func (t *tray) sendToPhone(client, text string) {
+	s := t.srv
+	name := s.deviceName(client)
+	e, err := clipEvent(text)
+	if err != nil {
+		go t.info("Enviar para o celular", err.Error())
+		return
+	}
+	if s.hub.PublishTo(client, e) == 0 {
+		go t.info("Enviar para o celular", name+" fechou o app. Abra o Velksync no celular e tente de novo.")
+		return
+	}
+	what := "um texto"
+	if e.Type == "open_url" {
+		what = "um link"
+	}
+	log.Printf("enviado para %s: %s", name, what)
+	s.history.Add("Este PC", histSend, "enviou "+what+" para "+name, false)
+	t.Notify("Enviado para "+name, clipPreview(text))
 }
 
 // checkUpdatesNow procura versão nova na hora e oferece instalar.

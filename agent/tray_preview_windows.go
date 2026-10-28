@@ -48,6 +48,12 @@ func init() {
 			s.notice("Pixel 9", `rodou "Abrir Steam"`)
 			s.notice("Galaxy", "rodou no terminal: dir C:\\")
 			s.notice("Pixel 9", "agendou desligar às 23:00")
+		case "clipboard":
+			// Só tamanho e tipo: o conteúdo copiado é da pessoa.
+			text, err := readClipboard()
+			e, cerr := clipEvent(text)
+			fmt.Printf("área de transferência: %d caracteres, tipo %q, erro %v / %v\n", len([]rune(text)), e.Type, err, cerr)
+			return nil
 		case "doctor":
 			theTray.doctor()
 			return nil

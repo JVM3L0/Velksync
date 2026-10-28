@@ -105,18 +105,18 @@ func TestTrayMenu(t *testing.T) {
 	})
 	want := []string{
 		"Velksync 0.5.0, rodando", "192.168.3.5 · 1 celular conectado", "-",
-		"Parear um celular…", "Celulares pareados", "Conferir Wake-on-LAN…", "Histórico…", "-",
+		"Enviar para o celular", "Parear um celular…", "Celulares pareados", "Conferir Wake-on-LAN…", "Histórico…", "-",
 		"Cancelar: desligar quando a mídia parar", "-",
 		"Avisar o que os celulares fazem", "Procurar atualizações", "Procurar atualizações agora", "Abrir o log", "Abrir a pasta da configuração", "-", "Sair do agente…",
 	}
 	if got := menuTexts(items); strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("menu:\n%v\nqueria\n%v", got, want)
 	}
-	devices := items[4].Sub
+	devices := items[5].Sub
 	if len(devices) != 2 || devices[1].Text != "Galaxy · desde 25/10/2026" || devices[1].Sub[0].ID != menuRevokeBase+1 {
 		t.Errorf("celulares: %+v", devices)
 	}
-	if !items[10].Checked || !items[0].Disabled {
+	if !items[11].Checked || !items[0].Disabled {
 		t.Error("marcação ou status errados")
 	}
 
@@ -127,7 +127,7 @@ func TestTrayMenu(t *testing.T) {
 			t.Errorf("sem %q em %s", want, texts)
 		}
 	}
-	if strings.Contains(texts, "Cancelar:") || empty[10].Checked {
+	if strings.Contains(texts, "Cancelar:") || empty[11].Checked {
 		t.Errorf("sem agendamento e avisos desligados: %s", texts)
 	}
 }
@@ -154,7 +154,7 @@ func TestPowerAsksAndCanBeCancelledAtThePC(t *testing.T) {
 	d := &fakeDesktop{present: true, asked: make(chan string, 1)}
 	s := &Server{cfg: Config{Token: testMaster, Devices: []PairedDevice{{ID: "dev1", Name: "Pixel 9"}}}, hub: NewHub(), ui: d}
 	s.routes()
-	events := s.hub.Subscribe()
+	events := s.hub.Subscribe("")
 
 	req := withAuth(httptest.NewRequest("POST", "/api/power", strings.NewReader(`{"action":"reboot"}`)), authDevice, "dev1")
 	rec := httptest.NewRecorder()
@@ -244,5 +244,24 @@ func TestTrayMenuUpdate(t *testing.T) {
 	busy := trayMenu(trayState{Version: "0.6.1", Update: "0.6.2", Updating: true})
 	if busy[2].ID != 0 || !busy[2].Disabled || busy[2].Text != "Atualizando para 0.6.2…" {
 		t.Errorf("atualizando: o item deveria estar desativado: %+v", busy[2])
+	}
+}
+
+func TestTraySendMenu(t *testing.T) {
+	none := trayMenu(trayState{Version: "0.7.0", SendPreview: "Nada copiado"})[2]
+	if none.Text != "Enviar para o celular" || none.Sub[2].Text != "Nenhum celular com o app aberto" || !none.Sub[2].Disabled {
+		t.Errorf("sem celular: %+v", none)
+	}
+	two := trayMenu(trayState{Version: "0.7.0", SendPreview: "Link: https://x", SendReady: true,
+		SendTargets: []string{"Galaxy", "Pixel 9"}})[2]
+	if two.Sub[0].Text != "Link: https://x" || !two.Sub[0].Disabled {
+		t.Errorf("prévia: %+v", two.Sub[0])
+	}
+	if two.Sub[3].ID != menuSendBase+1 || two.Sub[3].Text != "Pixel 9" || two.Sub[3].Disabled {
+		t.Errorf("destino: %+v", two.Sub[3])
+	}
+	empty := trayMenu(trayState{Version: "0.7.0", SendPreview: "Nada copiado", SendTargets: []string{"Pixel 9"}})[2]
+	if !empty.Sub[2].Disabled {
+		t.Error("nada copiado: o celular deveria aparecer desativado")
 	}
 }
