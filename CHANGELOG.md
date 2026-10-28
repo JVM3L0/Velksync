@@ -16,6 +16,10 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
   abre no navegador do PC, outro texto vai para a área de transferência.
 - "Procurar atualizações agora" no menu do ícone e "Procurar agora" em
   Configurações do app.
+- Processos na aba Desempenho: os 10 programas que mais usam CPU ou
+  memória, somando os processos de cada um. Só leitura.
+- Primeira vez guiada: o que é, instalar o agente, parear e testar o Ligar
+  (com dicas se não funcionar). Só sem PC cadastrado; dá para pular.
 
 ### Corrigido
 - Dois cliques em "Atualizar" abriam dois instaladores, que falhavam com

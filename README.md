@@ -154,6 +154,8 @@ O painel do PC no app mostra CPU, GPU, memória e disco em tempo real, no estilo
 - **Windows**: APIs nativas (as mesmas do Gerenciador de Tarefas). O Windows não expõe temperaturas sem driver de terceiros, então elas não aparecem.
 - **Linux**: `/proc` e `/sys`; GPU AMD pelo driver `amdgpu` e temperatura da CPU pelo `k10temp`/`coretemp`.
 
+Abaixo, **Processos** lista os 10 programas que mais usam CPU ou memória (os processos do mesmo programa somados, como as várias abas de um navegador). Só leitura: nada é encerrado pelo app. O PC só é consultado com a aba aberta.
+
 ## 6. Mídia
 
 A aba **Mídia** mostra o que está tocando no PC (capa, título, artista, posição) e controla play/pause, anterior, próxima, posição e o volume do PC. Funciona com qualquer player que se integre ao sistema: Spotify, navegadores, VLC etc.
@@ -203,6 +205,10 @@ O agente guarda as últimas 200 ações em `history.json`, ao lado da config: qu
 ## 8.2 Atualizar o app
 
 O app procura versão nova uma vez por dia, ao abrir (desligue em **Configurações → Atualizações**, onde também fica **Procurar agora**). Havendo, aparece um cartão no topo da lista de PCs: **Atualizar** baixa o APK do processador do celular, só do GitHub e por HTTPS, confere com o `SHA256SUMS` e abre o instalador do Android. Na primeira vez o Android pede para liberar "Instalar apps desta fonte" para o Velksync. O Android só instala por cima um APK assinado com a mesma chave do app instalado, então um arquivo trocado é recusado por ele também. O app de desenvolvimento ("Velksync Dev") não se atualiza.
+
+## 8.3 Primeira vez
+
+Sem nenhum PC cadastrado, o app abre um passo a passo: o que é o Velksync, como instalar o agente (com o link do instalador para copiar), parear pelo QR ou pela busca na rede e um teste de **Ligar**, com as dicas de Wake-on-LAN se o PC não responder. Dá para pular em qualquer passo.
 
 ## 9. Rodar o app
 
