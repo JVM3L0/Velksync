@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../models/device.dart';
@@ -22,6 +23,7 @@ import '../ui/wake_help.dart';
 import '../ui/widgets.dart';
 import 'device_form_screen.dart';
 import 'device_screen.dart';
+import 'onboarding_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -105,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _devices = await _store.load();
     if (mounted) setState(() {});
     _start();
+    await _maybeOnboard();
     // Toque no widget: abre direto a tela daquele PC.
     WidgetBridge.onOpen(_openFromWidget);
     if (await WidgetBridge.takeLaunch() case final launch?) _openFromWidget(launch);
@@ -280,6 +283,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  static const _onboardedKey = 'onboarding_done';
+
+  /// Primeira vez (nenhum PC e nunca passou pelo guia): mostra o passo a passo.
+  Future<void> _maybeOnboard() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_devices.isNotEmpty || (prefs.getBool(_onboardedKey) ?? false) || !mounted) return;
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OnboardingScreen(
+          wakes: _wakes,
+          addPc: () async {
+            final result = await Navigator.push<Object>(
+              context,
+              MaterialPageRoute(builder: (_) => const DeviceFormScreen()),
+            );
+            if (result is! Device) return null;
+            await _save(result);
+            _refresh();
+            return result;
+          },
+        ),
+      ),
+    );
+    await prefs.setBool(_onboardedKey, true);
   }
 
   /// Texto do menu Compartilhar: escolhe o PC e manda.
