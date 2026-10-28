@@ -22,7 +22,11 @@ func TestProcessTopAggregatesAndSorts(t *testing.T) {
 		{PID: 4, Name: "novo.exe", CPUTime: 3 * time.Second, Mem: 10 << 20},  // sem leitura anterior
 		{PID: 0, Name: "System Idle Process"},
 	}
-	byCPU, byMem := processTop(prev, cur, time.Second, 4)
+	top := processTop(prev, cur, time.Second, 4, false)
+	byCPU, byMem := top["by_cpu"].([]ProcessInfo), top["by_mem"].([]ProcessInfo)
+	if _, ok := top["by_gpu"]; ok {
+		t.Error("sem GPU por processo, não deveria ter by_gpu")
+	}
 	// chrome: (0,4 + 0,4) s em 1 s × 4 núcleos = 20%; Code: 0,2 s → 5%.
 	if byCPU[0].Name != "chrome.exe" || byCPU[0].Count != 2 || math.Abs(byCPU[0].CPU-20) > 0.01 {
 		t.Errorf("1º por CPU: %+v", byCPU[0])
@@ -48,9 +52,11 @@ func TestProcessTopLimitsToTen(t *testing.T) {
 	for i := range 30 {
 		cur = append(cur, procSample{PID: uint32(i + 1), Name: string(rune('a'+i%26)) + "x.exe", Mem: uint64(i)})
 	}
-	byCPU, byMem := processTop(nil, cur, time.Second, 8)
-	if len(byCPU) != topProcesses || len(byMem) != topProcesses {
-		t.Errorf("%d / %d", len(byCPU), len(byMem))
+	top := processTop(nil, cur, time.Second, 8, true)
+	for _, k := range []string{"by_cpu", "by_mem", "by_gpu", "by_vram"} {
+		if n := len(top[k].([]ProcessInfo)); n != topProcesses {
+			t.Errorf("%s: %d", k, n)
+		}
 	}
 }
 
@@ -60,9 +66,9 @@ func TestProcessWatchMeasuresAndCaches(t *testing.T) {
 	w := &processWatch{
 		now:  func() time.Time { return clock },
 		wait: func(d time.Duration) { waited += d; clock = clock.Add(d) },
-		read: func() ([]procSample, error) {
+		read: func() ([]procSample, bool, error) {
 			reads++
-			return []procSample{{PID: 7, Name: "a.exe", CPUTime: time.Duration(reads) * 100 * time.Millisecond, Mem: 1}}, nil
+			return []procSample{{PID: 7, Name: "a.exe", CPUTime: time.Duration(reads) * 100 * time.Millisecond, Mem: 1}}, false, nil
 		},
 	}
 	top, err := w.Top()
@@ -84,7 +90,7 @@ func TestProcessWatchMeasuresAndCaches(t *testing.T) {
 }
 
 func TestReadProcessesFindsItself(t *testing.T) {
-	ps, err := readProcesses()
+	ps, _, err := readProcesses()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,4 +103,21 @@ func TestReadProcessesFindsItself(t *testing.T) {
 		}
 	}
 	t.Error("o próprio processo não apareceu")
+}
+
+func TestProcessTopGPU(t *testing.T) {
+	cur := []procSample{
+		{PID: 1, Name: "game.exe", GPU: 70, VRAM: 3 << 30, Mem: 2 << 30},
+		{PID: 2, Name: "chrome.exe", GPU: 5, VRAM: 300 << 20, Mem: 500 << 20},
+		{PID: 3, Name: "chrome.exe", GPU: 3, VRAM: 200 << 20, Mem: 400 << 20},
+		{PID: 4, Name: "obs64.exe", GPU: 9, VRAM: 100 << 20, Mem: 300 << 20},
+	}
+	top := processTop(nil, cur, time.Second, 8, true)
+	byGPU, byVRAM := top["by_gpu"].([]ProcessInfo), top["by_vram"].([]ProcessInfo)
+	if byGPU[0].Name != "game.exe" || byGPU[1].Name != "obs64.exe" || byGPU[2].Name != "chrome.exe" || byGPU[2].GPU != 8 {
+		t.Errorf("por GPU: %+v", byGPU[:3])
+	}
+	if byVRAM[1].Name != "chrome.exe" || byVRAM[1].VRAM != 500<<20 {
+		t.Errorf("por VRAM: %+v", byVRAM[:2])
+	}
 }

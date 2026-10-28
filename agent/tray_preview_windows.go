@@ -54,6 +54,19 @@ func init() {
 			e, cerr := clipEvent(text)
 			fmt.Printf("área de transferência: %d caracteres, tipo %q, erro %v / %v\n", len([]rune(text)), e.Type, err, cerr)
 			return nil
+		case "processes":
+			// Só números: quais programas rodam é da pessoa.
+			top, err := newProcessWatch().Top()
+			if err != nil {
+				return err
+			}
+			gpu, _ := top["by_gpu"].([]ProcessInfo)
+			vram, _ := top["by_vram"].([]ProcessInfo)
+			fmt.Printf("processos: %v · com GPU por processo: %v\n", top["total"], gpu != nil)
+			if len(gpu) > 0 && len(vram) > 0 {
+				fmt.Printf("maior GPU: %.1f%% · maior VRAM: %d MB\n", gpu[0].GPU, vram[0].VRAM>>20)
+			}
+			return nil
 		case "doctor":
 			theTray.doctor()
 			return nil

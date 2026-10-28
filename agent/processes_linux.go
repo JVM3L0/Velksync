@@ -8,11 +8,12 @@ import (
 )
 
 // readProcesses lê /proc: tempo de CPU (campos 14 e 15 do stat, em ticks de
-// 1/100 s) e memória residente (statm × tamanho da página).
-func readProcesses() ([]procSample, error) {
+// 1/100 s) e memória residente (statm × tamanho da página). GPU por processo
+// ainda não (depende do driver).
+func readProcesses() ([]procSample, bool, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	page := uint64(os.Getpagesize())
 	var out []procSample
@@ -32,7 +33,7 @@ func readProcesses() ([]procSample, error) {
 		}
 		out = append(out, p)
 	}
-	return out, nil
+	return out, false, nil
 }
 
 func readSmall(path string) string {

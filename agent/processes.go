@@ -18,6 +18,8 @@ type procSample struct {
 	Name    string
 	CPUTime time.Duration // usuário + sistema desde que o processo começou
 	Mem     uint64        // bytes em uso (working set no Windows, RSS no Linux)
+	GPU     float64       // % da GPU agora (Windows); já é taxa, não acumulado
+	VRAM    uint64        // memória de vídeo dedicada em uso (Windows)
 }
 
 type ProcessInfo struct {
@@ -25,12 +27,14 @@ type ProcessInfo struct {
 	Count int     `json:"count"` // quantos processos com esse nome
 	CPU   float64 `json:"cpu"`   // % do total do PC (todos os núcleos = 100)
 	Mem   uint64  `json:"mem"`
+	GPU   float64 `json:"gpu"`  // % da GPU
+	VRAM  uint64  `json:"vram"` // bytes de VRAM
 }
 
 const topProcesses = 10
 
-// processTop compara duas leituras e devolve os que mais usam CPU e memória.
-func processTop(prev, cur []procSample, elapsed time.Duration, cpus int) (byCPU, byMem []ProcessInfo) {
+// processTotals compara duas leituras e soma os processos de cada programa.
+func processTotals(prev, cur []procSample, elapsed time.Duration, cpus int) []ProcessInfo {
 	before := make(map[uint32]procSample, len(prev))
 	for _, p := range prev {
 		before[p.PID] = p
@@ -52,6 +56,8 @@ func processTop(prev, cur []procSample, elapsed time.Duration, cpus int) (byCPU,
 		}
 		info.Count++
 		info.Mem += p.Mem
+		info.GPU += p.GPU
+		info.VRAM += p.VRAM
 		// Só conta CPU de quem já estava na leitura anterior (e é o mesmo processo).
 		if b, ok := before[p.PID]; ok && strings.EqualFold(b.Name, p.Name) && p.CPUTime >= b.CPUTime && wall > 0 {
 			info.CPU += float64(p.CPUTime-b.CPUTime) / wall * 100
@@ -60,22 +66,41 @@ func processTop(prev, cur []procSample, elapsed time.Duration, cpus int) (byCPU,
 	all := make([]ProcessInfo, 0, len(order))
 	for _, k := range order {
 		info := *agg[k]
-		info.CPU = min(info.CPU, 100)
+		info.CPU, info.GPU = min(info.CPU, 100), min(info.GPU, 100)
 		all = append(all, info)
 	}
-	byCPU = slices.Clone(all)
-	slices.SortStableFunc(byCPU, func(a, b ProcessInfo) int {
-		if a.CPU != b.CPU {
-			if a.CPU > b.CPU {
+	return all
+}
+
+// topBy ordena por um valor (maior primeiro; empate pela memória) e corta em 10.
+func topBy(all []ProcessInfo, value func(ProcessInfo) float64) []ProcessInfo {
+	out := slices.Clone(all)
+	slices.SortStableFunc(out, func(a, b ProcessInfo) int {
+		if va, vb := value(a), value(b); va != vb {
+			if va > vb {
 				return -1
 			}
 			return 1
 		}
 		return compareMem(a, b)
 	})
-	byMem = slices.Clone(all)
-	slices.SortStableFunc(byMem, compareMem)
-	return byCPU[:min(topProcesses, len(byCPU))], byMem[:min(topProcesses, len(byMem))]
+	return out[:min(topProcesses, len(out))]
+}
+
+// processTop é o que a API devolve: por CPU e memória sempre; por GPU e
+// VRAM só quando o sistema informa uso de GPU por processo.
+func processTop(prev, cur []procSample, elapsed time.Duration, cpus int, withGPU bool) map[string]any {
+	all := processTotals(prev, cur, elapsed, cpus)
+	top := map[string]any{
+		"by_cpu": topBy(all, func(p ProcessInfo) float64 { return p.CPU }),
+		"by_mem": topBy(all, func(p ProcessInfo) float64 { return float64(p.Mem) }),
+		"total":  len(cur),
+	}
+	if withGPU {
+		top["by_gpu"] = topBy(all, func(p ProcessInfo) float64 { return p.GPU })
+		top["by_vram"] = topBy(all, func(p ProcessInfo) float64 { return float64(p.VRAM) })
+	}
+	return top
 }
 
 func compareMem(a, b ProcessInfo) int {
@@ -92,7 +117,7 @@ func compareMem(a, b ProcessInfo) int {
 // Só lê quando alguém pede (a seção aberta no app) e reaproveita o
 // resultado por 2 s se vários pedirem juntos.
 type processWatch struct {
-	read func() ([]procSample, error)
+	read func() ([]procSample, bool, error) // amostras e se trouxe GPU por processo
 	now  func() time.Time
 	wait func(time.Duration)
 
@@ -116,7 +141,7 @@ func (w *processWatch) Top() (map[string]any, error) {
 	}
 	// Leitura antiga demais (seção fechada há tempo): mede de novo agora.
 	if w.prev == nil || now.Sub(w.prevAt) > 30*time.Second {
-		prev, err := w.read()
+		prev, _, err := w.read()
 		if err != nil {
 			return nil, err
 		}
@@ -124,13 +149,13 @@ func (w *processWatch) Top() (map[string]any, error) {
 		w.wait(700 * time.Millisecond)
 		now = w.now()
 	}
-	cur, err := w.read()
+	cur, withGPU, err := w.read()
 	if err != nil {
 		return nil, err
 	}
-	byCPU, byMem := processTop(w.prev, cur, now.Sub(w.prevAt), runtime.NumCPU())
+	top := processTop(w.prev, cur, now.Sub(w.prevAt), runtime.NumCPU(), withGPU)
 	w.prev, w.prevAt = cur, now
-	w.last = map[string]any{"by_cpu": byCPU, "by_mem": byMem, "total": len(cur)}
+	w.last = top
 	w.lastAt = now
 	return w.last, nil
 }
