@@ -126,6 +126,9 @@ ThemeData buildTheme(ColorScheme scheme, {RoleColors? roles}) {
       year2023: false,
       linearTrackColor: scheme.surfaceContainerHighest,
       circularTrackColor: scheme.surfaceContainerHighest,
+      // Sem o ponto no fim do trilho do M3 2024: nas barras finas parecia defeito.
+      stopIndicatorColor: Colors.transparent,
+      stopIndicatorRadius: 0,
     ),
   );
 }
