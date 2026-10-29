@@ -37,7 +37,7 @@ class FakePc extends AgentClient {
   }
 
   @override
-  Future<Uint8List?> mediaArt() async => null;
+  Future<Uint8List?> mediaArt({String id = ''}) async => null;
 
   @override
   Future<void> mediaCommand(String action) async {
@@ -51,6 +51,8 @@ class FakePc extends AgentClient {
 /// PC com capa de verdade (uma por faixa) que conta quantas vezes a capa foi pedida.
 class ArtPc extends FakePc {
   int artRequests = 0;
+  int failArt = 0; // quantas buscas de capa falham antes de dar certo
+  final artIds = <String>[];
   static final _png = base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   );
@@ -67,8 +69,13 @@ class ArtPc extends FakePc {
   });
 
   @override
-  Future<Uint8List?> mediaArt() async {
+  Future<Uint8List?> mediaArt({String id = ''}) async {
     artRequests++;
+    artIds.add(id);
+    if (failArt > 0) {
+      failArt--;
+      return null;
+    }
     return _png;
   }
 
@@ -106,6 +113,34 @@ void main() {
     await settle();
     expect(find.text('Numb'), findsOneWidget);
     expect(pc.artRequests, 2, reason: 'a capa de "Numb" veio do cache');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('capa que não veio é buscada de novo, pelo id', (tester) async {
+    final pc = ArtPc()
+      ..title =
+          'Papercut' // outra capa: o cache das capas é de todos os testes
+      ..failArt = 1;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MediaPanel(client: pc)),
+      ),
+    );
+    Future<void> settle() async {
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+    }
+
+    await settle();
+    expect(pc.artRequests, 1);
+    expect(find.descendant(of: find.byType(MediaCover), matching: find.byType(Image)), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await settle();
+    expect(pc.artRequests, 2);
+    expect(pc.artIds, ['art-Papercut', 'art-Papercut']);
+    expect(find.descendant(of: find.byType(MediaCover), matching: find.byType(Image)), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 

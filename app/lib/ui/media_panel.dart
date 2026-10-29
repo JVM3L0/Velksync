@@ -45,6 +45,11 @@ class _MediaPanelState extends State<MediaPanel> {
   /// Quanto a troca espera pela capa nova; se demorar, ela entra depois.
   static const _artWait = Duration(milliseconds: 600);
 
+  /// A capa não veio (PC ocupado, capa trocando): pergunta de novo após
+  /// isto, até _artTries vezes por capa.
+  static const _artRetry = Duration(seconds: 3);
+  static const _artTries = 5;
+
   /// Últimas capas já baixadas e analisadas, por PC e capa: voltar a uma
   /// faixa mostra a capa na hora. Só na memória: até 20 capas e 16 MB (cada
   /// capa pode ter até 5 MB).
@@ -53,6 +58,9 @@ class _MediaPanelState extends State<MediaPanel> {
   MediaState? _state;
   Uint8List? _art;
   String _artId = '';
+  Timer? _artRetryTimer;
+  String _failedArtId = '';
+  int _artFails = 0;
   Timer? _poll, _tick, _retryLive;
   StreamSubscription<MediaState>? _live;
   DateTime _stamp = DateTime.now(); // quando _state foi lido (para avançar a posição)
@@ -102,6 +110,7 @@ class _MediaPanelState extends State<MediaPanel> {
     _volumeHide?.cancel();
     _flyBack?.cancel();
     _unhide?.cancel();
+    _artRetryTimer?.cancel();
     _live?.cancel();
     _smoother.dispose();
     super.dispose();
@@ -207,16 +216,37 @@ class _MediaPanelState extends State<MediaPanel> {
     final key = '${_c.device.id}|${st.artId}';
     if (_artCache.get(key) case final hit?) return hit;
     try {
-      final bytes = await _c.mediaArt().timeout(const Duration(seconds: 3), onTimeout: () => null);
-      if (bytes == null) return null;
+      // Pelo id: se a capa já trocou no PC, ele recusa em vez de mandar a nova,
+      // que ficaria guardada no id errado (a próxima leitura traz o id novo).
+      final bytes = await _c.mediaArt(id: st.artId).timeout(const Duration(seconds: 3), onTimeout: () => null);
+      if (bytes == null) {
+        _retryArt(st);
+        return null;
+      }
       final look = await _analyzeArt(bytes);
       if (look == null) return (bytes: bytes, aspect: 1.0, schemes: null); // não decodifica: não guarda
       final art = (bytes: bytes, aspect: look.aspect, schemes: look.schemes);
       _artCache.put(key, art);
       return art;
     } on AgentException {
+      _retryArt(st);
       return null;
     }
+  }
+
+  /// Busca a capa de novo daqui a pouco se ela ainda for a da tela e não veio.
+  void _retryArt(MediaState st) {
+    if (_failedArtId != st.artId) {
+      _failedArtId = st.artId;
+      _artFails = 0;
+    }
+    if (++_artFails > _artTries) return;
+    _artRetryTimer?.cancel();
+    _artRetryTimer = Timer(_artRetry, () async {
+      if (!mounted || _artId != st.artId || _art != null) return;
+      final a = await _loadArt(st);
+      if (a != null && mounted && _artId == st.artId) setState(() => _useArt(a));
+    });
   }
 
   void _useArt(_Art? a) {

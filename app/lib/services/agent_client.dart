@@ -99,10 +99,11 @@ class AgentClient {
   );
 
   /// Capa do que está tocando, pela mesma conexão fixada (por isso não usa
-  /// Image.network, que não teria o pin).
-  Future<Uint8List?> mediaArt() async {
+  /// Image.network, que não teria o pin). Com [id], o PC só entrega se a capa
+  /// ainda for essa (agentes antigos ignoram e entregam a atual).
+  Future<Uint8List?> mediaArt({String id = ''}) async {
     if (device.pin.isEmpty) return null;
-    final req = http.Request('GET', _uri('/api/media/art'))..headers.addAll(_headers);
+    final req = http.Request('GET', _uri('/api/media/art', id.isEmpty ? null : {'id': id}))..headers.addAll(_headers);
     try {
       final res = await http.Response.fromStream(await _http.send(req).timeout(const Duration(seconds: 6)));
       return res.statusCode == 200 && res.bodyBytes.length <= 5 << 20 ? res.bodyBytes : null;
