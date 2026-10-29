@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const version = "0.8.0"
+const version = "0.8.1"
 
 const usage = `velksync-agent %s
 

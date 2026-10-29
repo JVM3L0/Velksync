@@ -3,7 +3,7 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.8.1] - 2026-10-29
 
 ### Corrigido
 - Capa do player: às vezes ficava a capa da música anterior, ou nenhuma. O
