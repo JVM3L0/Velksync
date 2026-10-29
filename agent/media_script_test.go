@@ -33,4 +33,9 @@ func TestWindowsMediaScriptPitfalls(t *testing.T) {
 	if !strings.Contains(script, "paused_ms") {
 		t.Error("o auxiliar não informa paused_ms")
 	}
+	// O art_id vem do conteúdo da capa: pelo título, a capa da faixa anterior
+	// (que o Chrome ainda mostra logo depois da troca) ficava na faixa nova.
+	if strings.Contains(script, "GetHashCode") || !strings.Contains(script, "ComputeHash($bytes)") {
+		t.Error("art_id não vem do conteúdo da capa")
+	}
 }

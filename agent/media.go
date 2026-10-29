@@ -32,7 +32,8 @@ type MediaState struct {
 // mediaBackend é implementado por sistema (media_linux.go, media_windows.go).
 type mediaBackend interface {
 	State() (MediaState, error)
-	Art() (data []byte, contentType string, err error)
+	// Art devolve a capa e o art_id dela (o mesmo do State quando nada mudou).
+	Art() (data []byte, contentType, id string, err error)
 	Command(action string) error // play_pause, next, previous
 	SeekTo(positionMs int64) error
 	SetVolume(volume *float64, muted *bool) error
@@ -111,13 +112,20 @@ func (f *idleFilter) apply(st MediaState, now time.Time) MediaState {
 	return MediaState{Status: "stopped", Volume: st.Volume, Muted: st.Muted}
 }
 
-// GET /api/media/art
+// GET /api/media/art?id=<art_id>. Com o id, só entrega se a capa ainda for
+// aquela: o app guarda as capas por art_id, e uma capa trocada nesse meio
+// tempo ficaria guardada no id errado.
 func (s *Server) mediaArt(w http.ResponseWriter, r *http.Request) {
-	data, ctype, err := media().Art()
+	data, ctype, id, err := media().Art()
 	if err != nil || len(data) == 0 {
 		writeErr(w, http.StatusNotFound, "sem capa")
 		return
 	}
+	if want := r.URL.Query().Get("id"); want != "" && want != id {
+		writeErr(w, http.StatusConflict, "a capa mudou")
+		return
+	}
+	w.Header().Set("X-Art-Id", id)
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)

@@ -177,3 +177,44 @@ func TestIsPear(t *testing.T) {
 		t.Error("isPear")
 	}
 }
+
+// Logo depois da troca o Pear pode ainda estar na música anterior: o
+// Prefetch falha, espera pearArtRetry e tenta de novo.
+func TestPearPrefetchRetries(t *testing.T) {
+	f := newPearFake(t, true)
+	p := testPear(f, "tok-123", false, &saved{})
+	now := time.Now()
+	p.now = func() time.Time { return now }
+	settle := func() {
+		t.Helper()
+		for range 200 {
+			p.mu.Lock()
+			busy := p.fetching
+			p.mu.Unlock()
+			if !busy {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatal("a busca não terminou")
+	}
+
+	f.title = "Anterior"
+	p.Prefetch("Otonoke")
+	settle()
+	if _, _, ok := p.HD("Otonoke"); ok {
+		t.Fatal("guardou a capa de outra música")
+	}
+	f.title = "Otonoke"
+	p.Prefetch("Otonoke") // cedo demais: nem tenta
+	settle()
+	if _, _, ok := p.HD("Otonoke"); ok {
+		t.Fatal("tentou de novo antes da hora")
+	}
+	now = now.Add(pearArtRetry)
+	p.Prefetch("Otonoke")
+	settle()
+	if data, ctype, ok := p.HD("otonoke"); !ok || ctype != "image/png" || len(data) == 0 {
+		t.Fatalf("capa não chegou: %v %s", ok, ctype)
+	}
+}

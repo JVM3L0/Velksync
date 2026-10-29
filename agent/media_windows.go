@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"os/exec"
 	"strings"
@@ -30,16 +29,11 @@ const (
 )
 
 type smtcBackend struct {
-	mu      sync.Mutex
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	stdout  *bufio.Reader
-	idle    *time.Timer
-	lastArt struct {
-		id    string
-		data  []byte
-		ctype string
-	}
+	mu     sync.Mutex
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Reader
+	idle   *time.Timer
 }
 
 func newMediaBackend() mediaBackend { return &smtcBackend{} }
@@ -148,7 +142,11 @@ func (b *smtcBackend) State() (MediaState, error) {
 		// Outro art_id quando a capa grande fica disponível: o app guarda as
 		// capas por art_id e assim busca de novo.
 		if pear.Ready() && st.ArtID != "" {
-			st.ArtID += "-hd"
+			if _, _, ok := pear.HD(st.Title); ok {
+				st.ArtID += "-hd"
+			} else {
+				pear.Prefetch(st.Title)
+			}
 		}
 	}
 	if st.Player != "" {
@@ -157,49 +155,34 @@ func (b *smtcBackend) State() (MediaState, error) {
 	return st, err
 }
 
-// "Spotify.exe" → "Spotify"; "308046B0AF4A39CB" (Firefox) fica como está.
-func (b *smtcBackend) Art() ([]byte, string, error) {
+func (b *smtcBackend) Art() ([]byte, string, string, error) {
 	st, err := b.State()
 	if err != nil {
-		return nil, "", err
-	}
-	if st.ArtID == "" {
-		return nil, "", errNoMedia
-	}
-	b.mu.Lock()
-	cached := b.lastArt
-	b.mu.Unlock()
-	if cached.id == st.ArtID {
-		return cached.data, cached.ctype, nil
+		return nil, "", "", err
 	}
 	if strings.HasSuffix(st.ArtID, "-hd") && pear != nil {
-		data, ctype, err := pear.Art(st.Title)
-		if err == nil {
-			b.mu.Lock()
-			b.lastArt.id, b.lastArt.data, b.lastArt.ctype = st.ArtID, data, ctype
-			b.mu.Unlock()
-			return data, ctype, nil
+		if data, ctype, ok := pear.HD(st.Title); ok {
+			return data, ctype, st.ArtID, nil
 		}
-		log.Printf("capa do Pear indisponível, usando a do Windows: %v", err)
 	}
+	// O auxiliar lê a imagem na hora e devolve o id dela, que pode ser mais
+	// novo que o do estado acima.
 	var res struct {
+		ID   string `json:"id"`
 		Data string `json:"data"`
 	}
 	if err := b.call(map[string]any{"cmd": "art"}, &res); err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	data, err := base64.StdEncoding.DecodeString(res.Data)
 	if err != nil || len(data) > maxArtBytes {
-		return nil, "", errors.New("capa inválida")
+		return nil, "", "", errors.New("capa inválida")
 	}
 	ctype := http.DetectContentType(data)
 	if !strings.HasPrefix(ctype, "image/") {
-		return nil, "", errors.New("capa não é imagem")
+		return nil, "", "", errors.New("capa não é imagem")
 	}
-	b.mu.Lock()
-	b.lastArt.id, b.lastArt.data, b.lastArt.ctype = st.ArtID, data, ctype
-	b.mu.Unlock()
-	return data, ctype, nil
+	return data, ctype, res.ID, nil
 }
 
 func (b *smtcBackend) Command(action string) error {

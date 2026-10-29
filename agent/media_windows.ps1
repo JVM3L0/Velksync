@@ -108,8 +108,12 @@ function State {
     if ($status -eq 'paused' -and $tl.LastUpdatedTime.Year -gt 2000) {
         $pausedMs = [Math]::Max(0.0, ([DateTimeOffset]::Now - $tl.LastUpdatedTime).TotalMilliseconds)
     }
-    $artId = ''
-    if ($p.Thumbnail) { $artId = ('{0:x8}' -f ("$($p.Title)|$($p.Artist)|$($p.AlbumTitle)").GetHashCode()) }
+    Thumb $p $false
+    $t = $script:thumb
+    $artId = $t.id
+    # Faixa nova ainda com a imagem da anterior: espera um pouco a troca (no
+    # mesmo álbum a capa é igual mesmo, e passa a valer depois desse tempo).
+    if ($artId -and $artId -eq $t.prevId -and ([DateTime]::UtcNow - $t.changed).TotalSeconds -lt 2.5) { $artId = '' }
     @{
         available   = $true
         player      = $s.SourceAppUserModelId
@@ -128,20 +132,57 @@ function State {
     }
 }
 
+# Capa identificada pelo conteúdo, não pelo título: o Chrome (e o Pear) troca
+# o título antes da imagem, e por um instante a capa ainda é a da faixa
+# anterior. Um id pelo título guardava essa capa errada para a faixa nova.
+# Lê a imagem a cada consulta logo depois da troca (é quando ela muda) e,
+# depois disso, a cada 5 s.
+$sha = [System.Security.Cryptography.SHA256]::Create()
+$script:thumb = @{ key = ''; changed = [DateTime]::MinValue; read = [DateTime]::MinValue; id = ''; prevId = ''; bytes = $null }
+
+function Thumb($p, [bool]$force) {
+    $t = $script:thumb
+    $now = [DateTime]::UtcNow
+    $key = "$($p.Title)|$($p.Artist)|$($p.AlbumTitle)"
+    if ($key -ne $t.key) {
+        if ($t.id) { $t.prevId = $t.id }
+        $t.key = $key
+        $t.changed = $now
+        $t.read = [DateTime]::MinValue
+    }
+    if (-not $p.Thumbnail) {
+        $t.id = ''
+        $t.bytes = $null
+        return
+    }
+    if (-not $force -and ($now - $t.changed).TotalSeconds -ge 15 -and ($now - $t.read).TotalSeconds -lt 5) { return }
+    $t.read = $now
+    try {
+        $stream = Await ($p.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+        # O PowerShell não enxerga os membros do stream WinRT (__ComObject); por
+        # reflexão na interface .NET o runtime faz o QueryInterface sozinho.
+        $size = [Windows.Storage.Streams.IRandomAccessStream].GetProperty('Size').GetValue($stream)
+        if ($size -gt 5MB) { throw 'capa grande demais' }
+        $ctor = [Windows.Storage.Streams.DataReader].GetConstructor([Type[]]@([Windows.Storage.Streams.IInputStream]))
+        $reader = $ctor.Invoke(@($stream))
+        $n = Await ($reader.LoadAsync([uint32]$size)) ([uint32])
+        $bytes = New-Object byte[] $n
+        $reader.ReadBytes($bytes)
+        $t.bytes = $bytes
+        $t.id = -join ($sha.ComputeHash($bytes)[0..7] | ForEach-Object { $_.ToString('x2') })
+    }
+    catch {
+        $t.id = ''
+        $t.bytes = $null
+    }
+}
+
 function Art {
     $p = Await ((Session).TryGetMediaPropertiesAsync()) $Props
-    if (-not $p.Thumbnail) { throw 'sem capa' }
-    $stream = Await ($p.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-    # O PowerShell não enxerga os membros do stream WinRT (__ComObject); por
-    # reflexão na interface .NET o runtime faz o QueryInterface sozinho.
-    $size = [Windows.Storage.Streams.IRandomAccessStream].GetProperty('Size').GetValue($stream)
-    if ($size -gt 5MB) { throw 'capa grande demais' }
-    $ctor = [Windows.Storage.Streams.DataReader].GetConstructor([Type[]]@([Windows.Storage.Streams.IInputStream]))
-    $reader = $ctor.Invoke(@($stream))
-    $n = Await ($reader.LoadAsync([uint32]$size)) ([uint32])
-    $bytes = New-Object byte[] $n
-    $reader.ReadBytes($bytes)
-    @{ data = [Convert]::ToBase64String($bytes) }
+    Thumb $p $true
+    $t = $script:thumb
+    if (-not $t.bytes) { throw 'sem capa' }
+    @{ id = $t.id; data = [Convert]::ToBase64String($t.bytes) }
 }
 
 function Command([string]$action) {

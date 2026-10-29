@@ -53,6 +53,12 @@ type pearClient struct {
 	cacheKey  string
 	cacheData []byte
 	cacheType string
+	// Busca da capa em segundo plano (Prefetch): uma por vez, e uma música
+	// que falhou só tenta de novo depois de pearArtRetry, até pearArtTries vezes.
+	fetching  bool
+	failTitle string
+	failAt    time.Time
+	fails     int
 }
 
 func newPearClient(token string, denied bool, save func(string, bool)) *pearClient {
@@ -149,7 +155,57 @@ func sameSong(a, b string) bool {
 	return a != "" && norm(a) == norm(b)
 }
 
-// Art devolve a capa grande da música com este título.
+const (
+	pearArtRetry = 2 * time.Second
+	pearArtTries = 10
+)
+
+// HD devolve a capa grande já baixada desta música, se houver.
+func (p *pearClient) HD(title string) ([]byte, string, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cacheKey == "" || !sameSong(p.cacheKey, title) {
+		return nil, "", false
+	}
+	return p.cacheData, p.cacheType, true
+}
+
+// Prefetch baixa a capa grande em segundo plano: o estado da mídia não
+// espera o Pear nem o servidor de imagens. Enquanto isso o app mostra a capa
+// do Windows; quando esta chega, o art_id muda e o app busca de novo. O Pear
+// pode ainda estar na música anterior logo depois da troca, por isso tenta
+// de novo algumas vezes.
+func (p *pearClient) Prefetch(title string) {
+	p.mu.Lock()
+	again := sameSong(p.failTitle, title)
+	if p.fetching || p.token == "" || title == "" ||
+		(again && (p.fails >= pearArtTries || p.now().Sub(p.failAt) < pearArtRetry)) {
+		p.mu.Unlock()
+		return
+	}
+	p.fetching = true
+	p.mu.Unlock()
+	go func() {
+		_, _, err := p.Art(title)
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		p.fetching = false
+		switch {
+		case err == nil:
+			p.failTitle, p.fails = "", 0
+		case sameSong(p.failTitle, title):
+			p.fails++
+			p.failAt = p.now()
+		default:
+			p.failTitle, p.fails, p.failAt = title, 1, p.now()
+		}
+		if err != nil && p.fails == pearArtTries {
+			log.Printf("capa do Pear indisponível, fica a do Windows: %v", err)
+		}
+	}()
+}
+
+// Art baixa (ou devolve do cache) a capa grande da música com este título.
 func (p *pearClient) Art(title string) ([]byte, string, error) {
 	p.mu.Lock()
 	token := p.token

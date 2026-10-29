@@ -161,42 +161,47 @@ func (m *mprisBackend) State() (MediaState, error) {
 	st.CanSeek, _ = props["CanSeek"].Value().(bool)
 	st.CanControl, _ = props["CanControl"].Value().(bool)
 	if art := metaString(meta, "mpris:artUrl"); art != "" {
-		sum := sha256.Sum256([]byte(art))
-		st.ArtID = hex.EncodeToString(sum[:8])
+		st.ArtID = artURLID(art)
 	}
 	return st, nil
 }
 
-func (m *mprisBackend) Art() ([]byte, string, error) {
+// artURLID: o artUrl muda junto com a imagem, então serve de id.
+func artURLID(artURL string) string {
+	sum := sha256.Sum256([]byte(artURL))
+	return hex.EncodeToString(sum[:8])
+}
+
+func (m *mprisBackend) Art() ([]byte, string, string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	_, obj, err := m.player()
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	v, err := obj.GetProperty(mprisPlayer + ".Metadata")
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	meta, _ := v.Value().(map[string]dbus.Variant)
 	artURL := metaString(meta, "mpris:artUrl")
 	if artURL == "" {
-		return nil, "", errNoMedia
+		return nil, "", "", errNoMedia
 	}
 	if m.art.url == artURL {
-		return m.art.data, m.art.ctype, nil
+		return m.art.data, m.art.ctype, artURLID(artURL), nil
 	}
 	data, err := fetchArt(artURL)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	// Só entrega imagens: um artUrl malicioso não pode vazar outro arquivo.
 	ctype := http.DetectContentType(data)
 	if !strings.HasPrefix(ctype, "image/") {
-		return nil, "", errors.New("capa não é imagem")
+		return nil, "", "", errors.New("capa não é imagem")
 	}
 	m.art.url, m.art.data, m.art.ctype = artURL, data, ctype
-	return data, ctype, nil
+	return data, ctype, artURLID(artURL), nil
 }
 
 // fetchArt lê a capa de file:// ou https://, com limite de tamanho e tempo.

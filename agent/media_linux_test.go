@@ -122,9 +122,9 @@ func TestMPRISStateAndControls(t *testing.T) {
 	if st, _ = m.State(); st.PositionMs != 90_000 {
 		t.Fatalf("seek: posição %d", st.PositionMs)
 	}
-	data, ctype, err := m.Art()
-	if err != nil || ctype != "image/png" || len(data) != len(tinyPNG) {
-		t.Fatalf("capa: %v %s %d", err, ctype, len(data))
+	data, ctype, id, err := m.Art()
+	if err != nil || ctype != "image/png" || len(data) != len(tinyPNG) || id != st.ArtID {
+		t.Fatalf("capa: %v %s %d %q", err, ctype, len(data), id)
 	}
 }
 
@@ -133,7 +133,7 @@ func TestMPRISArtOnlyServesImages(t *testing.T) {
 	secret := filepath.Join(t.TempDir(), "id_ed25519")
 	os.WriteFile(secret, []byte("-----BEGIN OPENSSH PRIVATE KEY-----\nsegredo\n"), 0o600)
 	exportFakePlayer(t, "file://"+secret)
-	if data, _, err := (&mprisBackend{}).Art(); err == nil {
+	if data, _, _, err := (&mprisBackend{}).Art(); err == nil {
 		t.Fatalf("serviu um arquivo que não é imagem (%d bytes)", len(data))
 	}
 }
