@@ -3,6 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Corrigido
+- Capa do player: às vezes ficava a capa da música anterior, ou nenhuma. O
+  Windows troca o título antes da imagem, e a capa era identificada pelo
+  título; agora é pelo conteúdo da imagem, o app pede a capa pelo id dela e
+  busca de novo quando não vem. A capa em alta do Pear Desktop baixa em
+  segundo plano (antes atrasava a capa e podia estourar o tempo do app).
+
 ## [0.8.0] - 2026-10-28
 
 ### Adicionado
