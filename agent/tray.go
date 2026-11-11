@@ -9,8 +9,9 @@ import (
 )
 
 // desktop é o lado do PC que alguém vê: ícone na bandeja, avisos e a
-// contagem antes de desligar. Só o Windows tem um (tray_windows.go); nos
-// outros sistemas fica o noDesktop, que não mostra nada.
+// contagem antes de desligar. O Windows tem o completo (tray_windows.go); o
+// Linux tem ícone, menu e avisos (tray_linux.go); nos outros sistemas fica o
+// noDesktop, que não mostra nada.
 type desktop interface {
 	// Present diz se há alguém para ver a tela: sessão desbloqueada.
 	Present() bool
@@ -171,6 +172,8 @@ type trayState struct {
 	SendReady   bool
 	SendTargets []string
 	UpdateCheck bool
+	// NoSend esconde "Enviar para o celular" (sem área de transferência no sistema).
+	NoSend bool
 }
 
 var sep = menuItem{Sep: true}
@@ -214,8 +217,10 @@ func trayMenu(st trayState) []menuItem {
 	if len(st.SendTargets) == 0 {
 		send.Sub = append(send.Sub, menuItem{Text: "Nenhum celular com o app aberto", Disabled: true})
 	}
+	if !st.NoSend {
+		items = append(items, send)
+	}
 	items = append(items,
-		send,
 		menuItem{ID: menuPair, Text: "Parear um celular…"},
 		devices,
 		menuItem{ID: menuDoctor, Text: "Conferir Wake-on-LAN…"},
