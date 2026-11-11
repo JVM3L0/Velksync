@@ -116,7 +116,7 @@ Reinicie o agente depois de editar a config.
 - `commands`: aparecem como botões no app. Um comando sem variante para o SO atual fica escondido.
 - `power_grace_seconds` (padrão 10, só Windows): com a sessão desbloqueada, desligar, reiniciar ou suspender pelo celular mostra uma contagem no PC, e quem está nele pode cancelar. Com a tela bloqueada, executa na hora. `0` desliga a contagem.
 - `update_check` (padrão `true`): procurar versão nova no GitHub uma vez por dia. Também muda pelo menu do ícone.
-- `tray_notices` (padrão `true`, só Windows): avisos quando um celular pareia, roda um comando ou agenda o desligamento. Também muda pelo menu do ícone.
+- `tray_notices` (padrão `true`): avisos quando um celular pareia, roda um comando ou agenda o desligamento. Também muda pelo menu do ícone.
 - `media_idle_minutes` (padrão 10): mídia pausada há mais que isso some do app e volta quando tocar de novo. Navegadores congelam abas paradas há muito tempo: o play é aceito, mas o vídeo não toca. `0` desliga.
 - `allow_shell: true`: libera o **terminal livre** no app. Qualquer celular pareado roda qualquer coisa como seu usuário; deixe desligado se não usar. No Windows os comandos rodam via `cmd.exe`; no Linux, via `/bin/sh`.
 - `devices` / `revoked`: mantidos pelo agente (celulares pareados e revogados). Não edite à mão.
@@ -182,7 +182,9 @@ Com o PC ligado, **Agendar** desliga ou suspende depois de um tempo (1 minuto a 
 - **Widget** (tela inicial → Widgets → Velksync): nome do PC, último estado visto pelo app ("visto às 16:40") e um botão que pede confirmação. Com o PC desligado, **Ligar** num diálogo do próprio Android; ligado, **Desligar** abre o app, que confere o estado real e pergunta antes.
 - Os dois usam o PC escolhido em **Configurações → Bloco "Ligar PC"**. Nenhum deles guarda credenciais: só nome, MAC e estado.
 
-## 8.1 Ícone na bandeja (Windows)
+## 8.1 Ícone na bandeja
+
+No Windows, perto do relógio; no Linux, na bandeja da sua barra (veja *No Linux*, abaixo).
 
 O agente mostra o ícone do Velksync perto do relógio. Pelo menu (botão direito ou clique):
 
@@ -197,6 +199,12 @@ O agente mostra o ícone do Velksync perto do relógio. Pelo menu (botão direit
 - **Abrir o log**, **Abrir a pasta da configuração** e **Sair do agente…** (volta no próximo login; ligar pelo celular continua funcionando).
 
 Quando um celular pede para desligar, reiniciar ou suspender com alguém usando o PC (sessão desbloqueada), aparece uma contagem de 10 s com **Cancelar** (o botão padrão) e **Desligar agora**. Se alguém cancela, o celular recebe o aviso. Com a tela bloqueada, executa na hora.
+
+**No Linux** o ícone usa o protocolo StatusNotifierItem, que KDE, waybar, Caelestia e o GNOME com a extensão AppIndicator entendem; o menu abre no clique e os avisos saem como notificações do desktop (`org.freedesktop.Notifications`). Sem host de bandeja o agente segue funcionando e o ícone aparece quando um subir. O menu é o do Windows menos o que depende de janela ou de área de transferência:
+- **Parear um celular…** abre o QR como imagem no visualizador da sessão (`xdg-open`); o arquivo fica em `$XDG_RUNTIME_DIR`, só para o seu usuário, e é apagado quando o código vence (5 min).
+- **Atualizar para X…** abre a página da versão; no Linux a atualização é à mão (`install-linux.sh` da versão nova).
+- Não existem **Enviar para o celular**, **Conferir Wake-on-LAN…** (use o `ethtool`, seção 1) e **Abrir o log** (use `journalctl --user -u velksync-agent -f`). A contagem antes de desligar também não: no Linux a energia é na hora.
+- **Sair do agente…** para o serviço com `systemctl --user stop velksync-agent`; ele volta no próximo login.
 
 ## 8.1.1 Histórico de ações
 
@@ -272,7 +280,7 @@ A release assina o `SHA256SUMS` e confere com `agent/release_key.pem` antes de p
 | Força bruta | 10 falhas de autenticação em 1 minuto bloqueiam o IP por 5 minutos. |
 | Servidor | Limites de tempo de leitura e de cabeçalho; no máximo 3 canais ao vivo por celular. |
 | Presença | Desafio-resposta com HMAC e segredo próprio (derivado do token mestre); processo sem privilégios, sandbox no Linux, limite de respostas por IP. |
-| Bandeja (Windows) | Nenhuma porta nova: o menu faz o que a linha de comando já faz, como o seu usuário. A contagem antes de desligar só se cancela no próprio PC. Avisos mostram o nome do celular e do comando, nunca a saída. |
+| Bandeja | Nenhuma porta nova (no Linux, só o D-Bus da sessão): o menu faz o que a linha de comando já faz, como o seu usuário. A contagem antes de desligar só se cancela no próprio PC. Avisos mostram o nome do celular e do comando, nunca a saída. |
 | Troca de textos | Só entre celulares pareados e o PC. Link só `http(s)`; o resto é texto na área de transferência, nunca executado. O celular escolhe o PC antes de enviar; o PC avisa o que recebeu. O histórico guarda o fato, não o conteúdo. |
 | Atualizações | Agente e app só baixam do GitHub por HTTPS, com limite de tamanho. O agente só roda o instalador se o `SHA256SUMS` tiver a assinatura Ed25519 das releases e o arquivo bater; o Android só aceita APK com a mesma assinatura do app. Nada é instalado sem a pessoa confirmar no próprio aparelho. |
 | Widget e atalho | Só nome, MAC e estado; desligar sempre passa pelo app e pede confirmação. Componentes internos não exportados. |

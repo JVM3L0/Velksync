@@ -3,6 +3,16 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+- Ícone na bandeja do Linux (StatusNotifierItem, sem biblioteca nova): status,
+  parear (QR aberto como imagem), celulares pareados com revogar, histórico,
+  cancelar agendamento, avisos e procurar atualizações, com avisos pelas
+  notificações do desktop. Ficam de fora o que depende de janela ou de área de
+  transferência: enviar para o celular, doctor do Wake-on-LAN e a contagem
+  antes de desligar.
+
 ## [0.8.1] - 2026-10-29
 
 ### Corrigido
