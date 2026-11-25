@@ -5,6 +5,8 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.9.0] - 2026-11-25
+
 ### Alterado
 - Ícone novo, da marca Velk: cinco teclas em V com a de baixo em menta, no
   Android, iOS, Windows, Linux e na tela de abertura.
