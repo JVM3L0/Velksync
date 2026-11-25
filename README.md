@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/icon.png" width="128" alt="Ícone do Velksync: asas de gelo em V"></p>
+<p align="center"><img src="docs/icon.png" width="128" alt="Ícone do Velksync: cinco teclas em V, a de baixo em menta"></p>
 
 # Velksync
 

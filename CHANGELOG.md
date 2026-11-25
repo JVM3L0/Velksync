@@ -5,6 +5,10 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Alterado
+- Ícone novo, da marca Velk: cinco teclas em V com a de baixo em menta, no
+  Android, iOS, Windows, Linux e na tela de abertura.
+
 ### Adicionado
 - Ícone na bandeja do Linux (StatusNotifierItem, sem biblioteca nova): status,
   parear (QR aberto como imagem), celulares pareados com revogar, histórico,

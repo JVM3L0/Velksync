@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Abertura nativa do Android 12+: marinho do ícone e as asas no centro.
+<!-- Abertura nativa do Android 12+: fundo do ícone e as teclas no centro.
      Definida também no modo noturno, que tem precedência sobre a versão. -->
 <resources>
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">

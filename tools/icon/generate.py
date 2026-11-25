@@ -1,189 +1,125 @@
-"""Gera o ícone do Velksync (asas de gelo em V, inspiradas na Velkhana).
+"""Gera o ícone do Velksync: Keycaps da marca Velk, com a tecla de baixo em menta.
 
-Uso (precisa do resvg-py; com uv não instala nada no sistema):
-    uv run --no-project --with resvg-py python tools/icon/generate.py android app/android/app/src/main/res preview.png
-    uv run --no-project --with resvg-py python tools/icon/generate.py sheet variacoes.png
-    uv run --no-project --with resvg-py python tools/icon/generate.py docs docs
-        (ícone do README e prévia 1280x640 para o GitHub, em docs/)
-    uv run --no-project --with resvg-py --with pillow python tools/icon/generate.py windows agent/deploy/installer
-        (velksync.ico e as imagens BMP do instalador)
+Uso (precisa do resvg-py e do pillow; com uv não instala nada no sistema):
+    uv run --no-project --with resvg-py --with pillow python tools/icon/generate.py
+        (Android, iOS, bandeja do Linux, .ico e BMPs do Windows e imagens de docs/)
 
-
-Canvas do ícone adaptativo: 108x108; o launcher mostra o miolo 72x72 (18..90)
-e o conteúdo deve caber no círculo de raio 33 (área segura).
+Depois, para o ícone do .exe, regenerar o agent/rsrc_windows_amd64.syso com o go-winres.
 """
-import math
-import sys
+import io
+import json
+from pathlib import Path
 
 import resvg_py
+from PIL import Image
 
-NAVY_A, NAVY_B = "#16345F", "#060F22"
-ICE_HI, ICE_MID, ICE_LO = "#F2FBFF", "#A8DDFF", "#4BA8E8"
-GLOW = "#7FE3FF"
-
-WING = [(54, 82), (22, 30), (33, 35), (34, 24), (43, 37), (46, 27), (54, 50)]
-
-
-def fit(points, radius=33.0):
-    """Escala e move as asas para o centro (54,54) cabendo no raio da área segura."""
-    allp = points + [(108 - x, y) for x, y in points]
-    xs, ys = [p[0] for p in allp], [p[1] for p in allp]
-    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    far = max(math.hypot(x - cx, y - cy) for x, y in allp)
-    s = radius / far
-    return lambda x, y: (54 + (x - cx) * s, 54 + (y - cy) * s), s
+ROOT = Path(__file__).resolve().parents[2]
+INK, PAPER, MENTA = "#1b1a1e", "#f6f4f1", "#a8e0b7"
+# Cantos superiores esquerdos das teclas num quadro de 48; a do meio é a de baixo.
+KEYS = [(0.2, 10.0), (10.0, 19.8), (19.8, 29.6), (29.6, 19.8), (39.4, 10.0)]
+SCALE = 1.08  # quadro de 48 dentro do miolo 72x72 do ícone adaptativo (canvas 108)
 
 
-def design(v):
-    """v: dict com dot, radius, ice (cores), bg (cores)."""
-    t, s = fit(WING, v.get("radius", 26.0))
-    wing = "M" + " L".join(f"{t(x, y)[0]:.2f},{t(x, y)[1]:.2f}" for x, y in WING) + " Z"
-    mirror = "M" + " L".join(f"{108 - t(x, y)[0]:.2f},{t(x, y)[1]:.2f}" for x, y in WING) + " Z"
-    hi, mid, lo = v.get("ice", (ICE_HI, ICE_MID, ICE_LO))
-    a, b = v.get("bg", (NAVY_A, NAVY_B))
-    sw = 1.2 * s / 0.84
-    body = (f'<defs><linearGradient id="bg" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="{a}"/>'
-            f'<stop offset="1" stop-color="{b}"/></linearGradient>'
-            f'<linearGradient id="ice" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{hi}"/>'
-            f'<stop offset="0.55" stop-color="{mid}"/><stop offset="1" stop-color="{lo}"/></linearGradient></defs>'
-            f'<rect width="108" height="108" fill="url(#bg)"/>'
-            f'<path d="{wing}" fill="url(#ice)" stroke="{hi}" stroke-width="{sw:.2f}" stroke-linejoin="round"/>'
-            f'<path d="{mirror}" fill="url(#ice)" stroke="{hi}" stroke-width="{sw:.2f}" stroke-linejoin="round"/>')
-    if v.get("dot", True):
-        dx, dy = t(54, 30)
-        body += f'<circle cx="{dx:.2f}" cy="{dy:.2f}" r="{4 * s:.2f}" fill="{GLOW}"/>'
-    return body
+def layers():
+    """(x, y, lado_x, lado_y, raio, cor, opacidade) no canvas de 108."""
+    for i, (x, y) in enumerate(KEYS):
+        color = MENTA if i == 2 else PAPER
+        for dx, dy, w, h, r, alpha in ((0, 0, 8.4, 8.4, 2.3, 0.5), (1.3, 0.8, 5.8, 5.4, 1.5, 1.0)):
+            yield (54 + (x + dx - 24) * SCALE, 54 + (y + dy - 24) * SCALE,
+                   w * SCALE, h * SCALE, r * SCALE, color, alpha)
 
 
-VARIANTS = {
-    "a": {},                                              # como a 5, sem brilho e centralizada
-    "b": {"dot": False},                                  # sem o ponto
-    "c": {"bg": ("#0E2547", "#0E2547")},                  # fundo liso
-    "d": {"ice": ("#FFFFFF", "#CBEBFF", "#7CC4F2")},      # gelo mais claro
-}
+def keys_svg():
+    return "".join(f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" rx="{r:.2f}" '
+                   f'fill="{c}" fill-opacity="{a}"/>' for x, y, w, h, r, c, a in layers())
 
 
-def tile(body, x, y, size, shape, uid):
-    clip = ('<rect x="18" y="18" width="72" height="72" rx="17"/>' if shape == "square"
-            else '<circle cx="54" cy="54" r="36"/>')
-    body = body.replace('id="bg"', f'id="bg{uid}"').replace("url(#bg)", f"url(#bg{uid})")
-    body = body.replace('id="ice"', f'id="ice{uid}"').replace("url(#ice)", f"url(#ice{uid})")
-    return (f'<svg x="{x}" y="{y}" width="{size}" height="{size}" viewBox="18 18 72 72">'
-            f'<defs><clipPath id="k{uid}">{clip}</clipPath></defs><g clip-path="url(#k{uid})">{body}</g></svg>')
+def render(svg, width, height, viewbox):
+    doc = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+           f'viewBox="{viewbox}">{svg}</svg>')
+    return Image.open(io.BytesIO(bytes(resvg_py.svg_to_bytes(svg_string=doc)))).convert("RGBA")
+
+
+def tile(size, radius=17):
+    """Miolo 72x72 do ícone adaptativo; radius=0 para o iOS, que recorta sozinho."""
+    body = f'<rect x="18" y="18" width="72" height="72" rx="{radius}" fill="{INK}"/>' + keys_svg()
+    return render(body, size, size, "18 18 72 72")
+
+
+def vector(paths):
+    return ('<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
+            '    android:width="108dp" android:height="108dp"\n'
+            '    android:viewportWidth="108" android:viewportHeight="108">\n' + "".join(paths) + "</vector>\n")
+
+
+def path(d, color, alpha=1.0):
+    return (f'    <path android:pathData="{d}"\n        android:fillColor="{color}" '
+            f'android:fillAlpha="{alpha}"/>\n')
+
+
+def rounded(x, y, w, h, r):
+    return (f"M{x + r:.2f},{y:.2f}h{w - 2 * r:.2f}q{r:.2f},0 {r:.2f},{r:.2f}v{h - 2 * r:.2f}"
+            f"q0,{r:.2f} {-r:.2f},{r:.2f}h{-(w - 2 * r):.2f}q{-r:.2f},0 {-r:.2f},{-r:.2f}"
+            f"v{-(h - 2 * r):.2f}q0,{-r:.2f} {r:.2f},{-r:.2f}z")
+
+
+def android():
+    res = ROOT / "app/android/app/src/main/res"
+    drawables = {
+        "background": [path("M0,0h108v108h-108z", INK)],
+        "foreground": [path(rounded(x, y, w, h, r), c, a) for x, y, w, h, r, c, a in layers()],
+        "monochrome": [path(rounded(x, y, w, h, r), "#FFFFFF", a) for x, y, w, h, r, _, a in layers()],
+    }
+    for name, paths in drawables.items():
+        (res / f"drawable/ic_launcher_{name}.xml").write_text(vector(paths))
+    for folder, px in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
+        tile(px).save(res / f"mipmap-{folder}/ic_launcher.png")
+
+
+def ios():
+    folder = ROOT / "app/ios/Runner/Assets.xcassets/AppIcon.appiconset"
+    for image in json.loads((folder / "Contents.json").read_text())["images"]:
+        points = float(image["size"].split("x")[0])
+        px = round(points * int(image["scale"].rstrip("x")))
+        tile(px, radius=0).convert("RGB").save(folder / image["filename"])
+
+
+def windows_and_linux():
+    out = ROOT / "agent/deploy/installer"
+    tile(256).save(ROOT / "agent/deploy/tray-icon.png")
+    tile(256).save(out / "velksync.ico", sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
+    # O Inno Setup escolhe a imagem pela escala da tela; BMP sem transparência.
+    for scale in (1, 2):
+        n = 55 * scale
+        small = Image.new("RGB", (n, n), "white")
+        icon = tile(n)
+        small.paste(icon, (0, 0), icon)
+        small.save(out / f"small-{scale}x.bmp")
+        side = render(
+            f'<rect width="164" height="314" fill="{INK}"/>'
+            f'<svg x="32" y="92" width="100" height="100" viewBox="18 18 72 72">{keys_svg()}</svg>'
+            f'<text x="82" y="228" text-anchor="middle" font-family="Ubuntu, DejaVu Sans" font-weight="700" '
+            f'font-size="22" fill="{PAPER}">Velksync</text>', 164 * scale, 314 * scale, "0 0 164 314")
+        side.convert("RGB").save(out / f"side-{scale}x.bmp")
+
+
+def docs():
+    out = ROOT / "docs"
+    tile(256).save(out / "icon.png")
+    # Prévia de link do GitHub (Settings → Social preview): 1280x640.
+    font = 'font-family="Ubuntu, DejaVu Sans"'
+    render(
+        f'<rect width="1280" height="640" fill="{INK}"/>'
+        f'<svg x="130" y="170" width="300" height="300" viewBox="18 18 72 72">{keys_svg()}</svg>'
+        f'<text x="500" y="315" {font} font-weight="700" font-size="104" fill="{PAPER}">Velksync</text>'
+        f'<text x="504" y="385" {font} font-size="32" fill="{MENTA}">Ligue, desligue e controle o PC pelo celular</text>'
+        f'<text x="504" y="440" {font} font-size="30" fill="{PAPER}" fill-opacity="0.6">'
+        "Windows e Linux · rede local · código aberto</text>",
+        1280, 640, "0 0 1280 640").save(out / "social-preview.png")
 
 
 if __name__ == "__main__":
-    mode = sys.argv[1]
-    if mode == "sheet":
-        # linha de cima: quadrado arredondado; de baixo: círculo. Colunas = variações a..d.
-        parts = []
-        for n, (k, v) in enumerate(VARIANTS.items()):
-            body = design(v)
-            parts.append(tile(body, 30 + n * 250, 30, 200, "square", f"s{k}"))
-            parts.append(tile(body, 30 + n * 250, 270, 200, "circle", f"c{k}"))
-        sheet = (f'<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="500">'
-                 f'<rect width="100%" height="100%" fill="#3B4A6B"/>{"".join(parts)}</svg>')
-        open(sys.argv[2], "wb").write(bytes(resvg_py.svg_to_bytes(svg_string=sheet)))
-
-    elif mode == "android":
-        import os
-        res = sys.argv[2]
-        v = VARIANTS["b"]
-        t, s = fit(WING, 26.0)
-        wing = "M" + " L".join(f"{t(x, y)[0]:.2f},{t(x, y)[1]:.2f}" for x, y in WING) + " Z"
-        mirror = "M" + " L".join(f"{108 - t(x, y)[0]:.2f},{t(x, y)[1]:.2f}" for x, y in WING) + " Z"
-        ys = [t(x, y)[1] for x, y in WING]
-        top, bottom = min(ys), max(ys)
-        sw = 1.2 * s / 0.84
-        head = ('<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
-                '    xmlns:aapt="http://schemas.android.com/aapt"\n'
-                '    android:width="108dp" android:height="108dp"\n'
-                '    android:viewportWidth="108" android:viewportHeight="108">\n')
-        bg = head + f'''    <path android:pathData="M0,0h108v108h-108z">
-        <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="0" android:startY="0"
-                android:endX="64.8" android:endY="108"
-                android:startColor="{NAVY_A}" android:endColor="{NAVY_B}"/>
-        </aapt:attr>
-    </path>
-</vector>
-'''
-        ice = f'''        <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="54" android:startY="{top:.2f}"
-                android:endX="54" android:endY="{bottom:.2f}">
-                <item android:offset="0" android:color="{ICE_HI}"/>
-                <item android:offset="0.55" android:color="{ICE_MID}"/>
-                <item android:offset="1" android:color="{ICE_LO}"/>
-            </gradient>
-        </aapt:attr>
-'''
-        fg = head
-        for d in (wing, mirror):
-            fg += (f'    <path android:pathData="{d}"\n        android:strokeColor="{ICE_HI}" '
-                   f'android:strokeWidth="{sw:.2f}" android:strokeLineJoin="round">\n{ice}    </path>\n')
-        fg += "</vector>\n"
-        mono = head + "".join(f'    <path android:pathData="{d}" android:fillColor="#FFFFFFFF"/>\n' for d in (wing, mirror)) + "</vector>\n"
-        for name, content in (("background", bg), ("foreground", fg), ("monochrome", mono)):
-            open(os.path.join(res, "drawable", f"ic_launcher_{name}.xml"), "w").write(content)
-        body = design(v)
-        for folder, px in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
-            svgs = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{px}" height="{px}" viewBox="0 0 {px} {px}">'
-                    + tile(body, 0, 0, px, "square", "l") + "</svg>")
-            open(os.path.join(res, f"mipmap-{folder}", "ic_launcher.png"), "wb").write(
-                bytes(resvg_py.svg_to_bytes(svg_string=svgs)))
-        # prévia final em 512 para conferência
-        open(sys.argv[3], "wb").write(bytes(resvg_py.svg_to_bytes(svg_string=(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">' + tile(body, 0, 0, 512, "square", "p") + "</svg>"))))
-
-    elif mode == "docs":
-        import os
-        out = sys.argv[2]
-        os.makedirs(out, exist_ok=True)
-        body = design(VARIANTS["b"])
-        render = lambda svg: bytes(resvg_py.svg_to_bytes(svg_string=svg))
-        # Ícone do README: o mesmo quadrado arredondado do launcher.
-        open(os.path.join(out, "icon.png"), "wb").write(render(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">'
-            + tile(body, 0, 0, 256, "square", "r") + "</svg>"))
-        # Prévia de link do GitHub (Settings → Social preview): 1280x640.
-        preview = (
-            '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640">'
-            f'<defs><linearGradient id="pbg" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="{NAVY_A}"/>'
-            f'<stop offset="1" stop-color="{NAVY_B}"/></linearGradient></defs>'
-            '<rect width="1280" height="640" fill="url(#pbg)"/>'
-            + tile(body, 130, 170, 300, "square", "g")
-            + f'<text x="500" y="315" font-family="Ubuntu, DejaVu Sans" font-weight="700" font-size="104" fill="{ICE_HI}">Velksync</text>'
-            f'<text x="504" y="385" font-family="Ubuntu, DejaVu Sans" font-size="38" fill="{ICE_MID}">Ligue, desligue e controle o PC pelo celular</text>'
-            f'<text x="504" y="440" font-family="Ubuntu, DejaVu Sans" font-size="30" fill="{ICE_LO}">Windows e Linux · rede local · código aberto</text>'
-            "</svg>")
-        open(os.path.join(out, "social-preview.png"), "wb").write(render(preview))
-
-    elif mode == "windows":
-        import io
-        import os
-
-        from PIL import Image
-        out = sys.argv[2]
-        os.makedirs(out, exist_ok=True)
-        body = design(VARIANTS["b"])
-        png = lambda svg: Image.open(io.BytesIO(bytes(resvg_py.svg_to_bytes(svg_string=svg)))).convert("RGBA")
-        square = lambda size: png(f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}">'
-                                  + tile(body, 0, 0, size, "square", "w") + "</svg>")
-        square(256).save(os.path.join(out, "velksync.ico"), sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
-        # O Inno Setup escolhe a imagem pela escala da tela; BMP sem transparência.
-        for scale in (1, 2):
-            n = 55 * scale
-            small = Image.new("RGB", (n, n), "white")
-            icon = square(n)
-            small.paste(icon, (0, 0), icon)
-            small.save(os.path.join(out, f"small-{scale}x.bmp"))
-            w, h = 164 * scale, 314 * scale
-            side = png(
-                f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 164 314">'
-                f'<defs><linearGradient id="sbg" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="{NAVY_A}"/>'
-                f'<stop offset="1" stop-color="{NAVY_B}"/></linearGradient></defs>'
-                '<rect width="164" height="314" fill="url(#sbg)"/>'
-                + tile(body, 32, 92, 100, "square", "s")
-                + f'<text x="82" y="228" text-anchor="middle" font-family="Ubuntu, DejaVu Sans" font-weight="700" '
-                f'font-size="22" fill="{ICE_HI}">Velksync</text></svg>')
-            side.convert("RGB").save(os.path.join(out, f"side-{scale}x.bmp"))
+    android()
+    ios()
+    windows_and_linux()
+    docs()
