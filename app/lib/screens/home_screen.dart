@@ -15,6 +15,7 @@ import '../services/settings.dart';
 import '../services/share_bridge.dart';
 import '../services/wake_tracker.dart';
 import '../services/widget_bridge.dart';
+import '../ui/role_colors.dart';
 import '../ui/theme.dart';
 import '../ui/send_sheet.dart';
 import '../ui/transitions.dart';
@@ -497,7 +498,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         key: const ValueKey('wake'),
                         tooltip: 'Ligar',
                         iconSize: 28,
-                        style: IconButton.styleFrom(minimumSize: const Size(56, 56)),
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(56, 56),
+                          backgroundColor: RoleColors.of(context).fill,
+                          foregroundColor: RoleColors.of(context).onFill,
+                        ),
                         onPressed: () => _wake(d),
                         icon: const Icon(Symbols.power_settings_new_rounded, weight: 600),
                       ),

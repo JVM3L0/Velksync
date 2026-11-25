@@ -105,6 +105,15 @@ void main() {
     expect(d.soften(ThemeIntensity.soft).background, d.background);
   });
 
+  test('Velk: botões e contêineres no pastel da marca, também no claro', () {
+    for (final p in [Palettes.velksyncLight, Palettes.velksyncDark]) {
+      final r = p.toRoles()!;
+      expect(r.fill, const Color(0xFFA8E0B7), reason: p.name);
+      expect(p.toScheme().primaryContainer, r.fill, reason: p.name);
+      expect(contrast(r.onFill!, r.fill!), greaterThanOrEqualTo(4.5), reason: p.name);
+    }
+  });
+
   test('padrões: Bem pastel no Catppuccin e no Gruvbox Suave, Vivo no Original', () {
     expect(
       Palettes.catppuccin(CatppuccinFlavor.mocha).$2.primary,
@@ -115,6 +124,5 @@ void main() {
       Palettes.gruvbox(GruvboxVariant.soft).$2.primary,
       Palettes.gruvboxSoftDark.soften(ThemeIntensity.soft).primary,
     );
-    expect(Palettes.velksyncDark.toRoles(), isNull);
   });
 }

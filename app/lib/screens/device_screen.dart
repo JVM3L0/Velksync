@@ -387,8 +387,8 @@ class _DeviceScreenState extends State<DeviceScreen> {
         MorphTile(
           icon: Symbols.power_settings_new_rounded,
           label: status == PcStatus.wakeFailed ? 'Tentar de novo' : 'Ligar',
-          color: scheme.primary,
-          onColor: scheme.onPrimary,
+          color: roles.fill ?? scheme.primary,
+          onColor: roles.onFill ?? scheme.onPrimary,
           onTap: _wake,
         ),
     ];

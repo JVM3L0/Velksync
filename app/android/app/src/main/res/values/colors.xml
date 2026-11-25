@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Cores do widget sem Material You (Android < 12): o gelo e marinho do ícone. -->
+<!-- Cores do widget sem Material You (Android < 12): o tema Velk. -->
 <resources>
-    <color name="widget_bg">#FFF4F9FF</color>
-    <color name="widget_text">#FF0B1A33</color>
-    <color name="widget_text_secondary">#FF3D5674</color>
-    <color name="widget_icon_bg">#FFD2E2F3</color>
-    <color name="widget_on_icon">#FF0B1A33</color>
-    <color name="widget_button">#FF1F6FB5</color>
-    <color name="widget_on_button">#FFFFFFFF</color>
-    <color name="widget_button_off">#FFDFEBF8</color>
-    <color name="widget_button_danger">#FFF9DEDC</color>
-    <color name="widget_on_button_danger">#FF8C1D18</color>
+    <color name="widget_bg">#FFFFFFFF</color>
+    <color name="widget_text">#FF1B1A1E</color>
+    <color name="widget_text_secondary">#FF55525C</color>
+    <color name="widget_icon_bg">#FFA8E0B7</color>
+    <color name="widget_on_icon">#FF1B1A1E</color>
+    <color name="widget_button">#FFA8E0B7</color>
+    <color name="widget_on_button">#FF1B1A1E</color>
+    <color name="widget_button_off">#FFE0DCD8</color>
+    <color name="widget_button_danger">#FFF2A0A0</color>
+    <color name="widget_on_button_danger">#FF1B1A1E</color>
     <!-- Abertura: o fundo do ícone, nos dois modos. -->
     <color name="splash_bg">#FF1B1A1E</color>
 </resources>

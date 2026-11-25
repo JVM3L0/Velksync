@@ -72,6 +72,9 @@ class Palette {
   /// Cores por função (ver RoleColors); sem elas, o tema deriva do ColorScheme.
   final Color? red, yellow, blue, green, pink;
 
+  /// Cores por função prontas (Velk), no lugar das derivadas acima.
+  final RoleColors? roles;
+
   const Palette({
     required this.name,
     required this.brightness,
@@ -95,6 +98,7 @@ class Palette {
     this.blue,
     this.green,
     this.pink,
+    this.roles,
   });
 
   /// Amostras para a prévia na tela de configurações.
@@ -170,6 +174,7 @@ class Palette {
     blue: blue ?? this.blue,
     green: green ?? this.green,
     pink: pink ?? this.pink,
+    roles: roles,
   );
 
   /// Fundo pastel do mesmo tom (temas claros): a cor quase toda puxada para o fundo.
@@ -177,6 +182,7 @@ class Palette {
 
   /// Cores por função desta paleta; null nas que não têm (usam o ColorScheme).
   RoleColors? toRoles() {
+    if (roles != null) return roles;
     final (r, y, b, g, p) = (red, yellow, blue, green, pink);
     if (r == null || y == null || b == null || g == null || p == null) return null;
     final dark = brightness == Brightness.dark;
@@ -258,16 +264,18 @@ class Palette {
       errorContainer = container(error);
       onErrorContainer = onContainer(error);
     }
+    // Velk: contêineres (FAB, aba ativa, botão tonal) no pastel cheio da marca.
+    final fill = roles?.fill, onFill = roles?.onFill;
     return ColorScheme(
       brightness: brightness,
       primary: primary,
       onPrimary: onAccent,
-      primaryContainer: primaryContainer,
-      onPrimaryContainer: onPrimaryContainer,
+      primaryContainer: fill ?? primaryContainer,
+      onPrimaryContainer: onFill ?? onPrimaryContainer,
       secondary: secondary,
       onSecondary: onAccent,
-      secondaryContainer: secondaryContainer,
-      onSecondaryContainer: onSecondaryContainer,
+      secondaryContainer: fill ?? secondaryContainer,
+      onSecondaryContainer: onFill ?? onSecondaryContainer,
       tertiary: tertiary,
       onTertiary: onAccent,
       tertiaryContainer: tertiaryContainer,
@@ -322,36 +330,71 @@ Color readable(Color fg, Color bg, {double min = 4.5}) {
 }
 
 abstract final class Palettes {
-  // Velksync: as cores do ícone (marinho do fundo, gelo das asas) com um toque
-  // lilás da Velkhana. Ver tools/icon/generate.py.
+  // Velk: neutros e pastéis do kit da marca, com menta como cor do Velksync.
+  // No claro, textos e linhas usam tons fundos; os botões continuam pastel.
+  static const _ink = Color(0xFF1B1A1E), _menta = Color(0xFFA8E0B7), _manteiga = Color(0xFFF7D78A);
+  static const _lilas = Color(0xFFCBBAF2), _pessego = Color(0xFFF8BFA0), _erro = Color(0xFFF2A0A0);
+
   static const velksyncDark = Palette(
-    name: 'Velksync Dark',
+    name: 'Velk Dark',
     brightness: Brightness.dark,
-    background: Color(0xFF0B1A33),
-    lowest: Color(0xFF060F22), // fundo do ícone
-    containers: [Color(0xFF0F2140), Color(0xFF16345F), Color(0xFF1D3F6E), Color(0xFF264B7E)],
-    text: Color(0xFFE6F4FF),
-    subtext: Color(0xFFA9C2DB),
-    outline: Color(0xFF6F8BAA),
-    primary: Color(0xFFA8DDFF), // gelo
-    secondary: Color(0xFF7FE3FF), // brilho
-    tertiary: Color(0xFFC3B5FF), // lilás
-    error: Color(0xFFFF8A8A),
+    background: _ink,
+    lowest: Color(0xFF151418),
+    containers: [Color(0xFF222126), Color(0xFF28262D), Color(0xFF323038), Color(0xFF3C3A43)],
+    text: Color(0xFFF6F4F1),
+    subtext: Color(0xFFC3C0CA),
+    outline: Color(0xFF8F8B97),
+    primary: _menta,
+    secondary: _lilas,
+    tertiary: _pessego,
+    error: _erro,
+    roles: RoleColors(
+      fill: _menta,
+      onFill: _ink,
+      danger: _erro,
+      onDanger: _ink,
+      warn: _manteiga,
+      onWarn: _ink,
+      info: _lilas,
+      onInfo: _ink,
+      ok: _menta,
+      onOk: _ink,
+      cpu: _menta,
+      gpu: _lilas,
+      mem: _pessego,
+      disk: _manteiga,
+    ),
   );
 
   static const velksyncLight = Palette(
-    name: 'Velksync Light',
+    name: 'Velk Light',
     brightness: Brightness.light,
-    background: Color(0xFFF4F9FF),
+    background: Color(0xFFF6F4F1),
     lowest: Color(0xFFFFFFFF),
-    containers: [Color(0xFFEAF3FD), Color(0xFFDFEBF8), Color(0xFFD2E2F3), Color(0xFFC4D7EC)],
-    text: Color(0xFF0B1A33),
-    subtext: Color(0xFF3D5674),
-    outline: Color(0xFF7189A6),
-    primary: Color(0xFF1F6FB5), // gelo profundo
-    secondary: Color(0xFF1C7A96),
-    tertiary: Color(0xFF6650B8),
-    error: Color(0xFFB3261E),
+    containers: [Color(0xFFFBFAF8), Color(0xFFFFFFFF), Color(0xFFEBE8E4), Color(0xFFE0DCD8)],
+    text: _ink,
+    subtext: Color(0xFF55525C),
+    outline: Color(0xFF7C7884),
+    primary: Color(0xFF2C6641),
+    secondary: Color(0xFF5B478F),
+    tertiary: Color(0xFF8C431B),
+    error: Color(0xFFA3333D),
+    roles: RoleColors(
+      fill: _menta,
+      onFill: _ink,
+      danger: _erro,
+      onDanger: _ink,
+      warn: _manteiga,
+      onWarn: _ink,
+      info: _lilas,
+      onInfo: _ink,
+      ok: _menta,
+      onOk: _ink,
+      cpu: Color(0xFF2C6641),
+      gpu: Color(0xFF5B478F),
+      mem: Color(0xFF8C431B),
+      disk: Color(0xFF715500),
+    ),
   );
 
   // Gruvbox e Catppuccin no estilo sólido: fundo da tela no tom mais

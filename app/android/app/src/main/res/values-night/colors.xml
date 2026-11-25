@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="widget_bg">#FF0B1A33</color>
-    <color name="widget_text">#FFE6F4FF</color>
-    <color name="widget_text_secondary">#FFA9C2DB</color>
-    <color name="widget_icon_bg">#FF16345F</color>
-    <color name="widget_on_icon">#FFA8DDFF</color>
-    <color name="widget_button">#FFA8DDFF</color>
-    <color name="widget_on_button">#FF060F22</color>
-    <color name="widget_button_off">#FF16345F</color>
-    <color name="widget_button_danger">#FF8C1D18</color>
-    <color name="widget_on_button_danger">#FFF9DEDC</color>
+    <color name="widget_bg">#FF28262D</color>
+    <color name="widget_text">#FFF6F4F1</color>
+    <color name="widget_text_secondary">#FFC3C0CA</color>
+    <color name="widget_icon_bg">#FFA8E0B7</color>
+    <color name="widget_on_icon">#FF1B1A1E</color>
+    <color name="widget_button">#FFA8E0B7</color>
+    <color name="widget_on_button">#FF1B1A1E</color>
+    <color name="widget_button_off">#FF3C3A43</color>
+    <color name="widget_button_danger">#FFF2A0A0</color>
+    <color name="widget_on_button_danger">#FF1B1A1E</color>
 </resources>

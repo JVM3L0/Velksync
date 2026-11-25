@@ -2,11 +2,13 @@ import 'package:material_ui/material_ui.dart';
 
 /// Cores por função: desligar em vermelho, reiniciar em amarelo, suspender em
 /// azul, CPU em azul, memória em verde. Gruvbox e Catppuccin trazem as suas
-/// (Palette.toRoles); o tema dinâmico e o Velksync derivam do ColorScheme,
-/// como sempre foi.
+/// (Palette.toRoles); o Velk traz as da marca; o tema dinâmico deriva do
+/// ColorScheme.
 @immutable
 class RoleColors extends ThemeExtension<RoleColors> {
   const RoleColors({
+    this.fill,
+    this.onFill,
     required this.danger,
     required this.onDanger,
     required this.warn,
@@ -26,6 +28,10 @@ class RoleColors extends ThemeExtension<RoleColors> {
 
   /// Linhas, barras e números sobre os cartões de desempenho.
   final Color cpu, gpu, mem, disk;
+
+  /// Botão principal cheio em pastel, quando o primary do tema é escuro demais
+  /// para isso (Velk claro); null usa o primary.
+  final Color? fill, onFill;
 
   factory RoleColors.fromScheme(ColorScheme s) => RoleColors(
     danger: Color.alphaBlend(s.error.withValues(alpha: 0.16), s.surfaceContainer),
@@ -62,6 +68,8 @@ class RoleColors extends ThemeExtension<RoleColors> {
     Color? mem,
     Color? disk,
   }) => RoleColors(
+    fill: fill,
+    onFill: onFill,
     danger: danger ?? this.danger,
     onDanger: onDanger ?? this.onDanger,
     warn: warn ?? this.warn,
@@ -81,6 +89,8 @@ class RoleColors extends ThemeExtension<RoleColors> {
     if (other == null) return this;
     Color l(Color a, Color b) => Color.lerp(a, b, t)!;
     return RoleColors(
+      fill: Color.lerp(fill, other.fill, t),
+      onFill: Color.lerp(onFill, other.onFill, t),
       danger: l(danger, other.danger),
       onDanger: l(onDanger, other.onDanger),
       warn: l(warn, other.warn),

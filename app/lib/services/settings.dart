@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../ui/palettes.dart';
 
 enum ThemeFamily {
+  velksync('Velk', 'Pastel com menta, as cores da marca'),
   dynamic('Dinâmico', 'Cores do papel de parede'),
-  velksync('Velksync', 'Gelo e marinho, as cores do ícone'),
   gruvbox('Gruvbox', 'Retrô e quente, suave ou original'),
   catppuccin('Catppuccin', 'Pastel: Latte, Frappé, Macchiato e Mocha');
 
@@ -22,7 +22,7 @@ class AppSettings extends ChangeNotifier {
   static const _gruvboxIntensityKey = 'theme_gruvbox_intensity';
   static const _catppuccinIntensityKey = 'theme_catppuccin_intensity';
 
-  ThemeFamily family = ThemeFamily.dynamic;
+  ThemeFamily family = ThemeFamily.velksync;
   ThemeMode mode = ThemeMode.system;
   // Padrão nas versões suaves; as saturadas continuam a uma escolha de distância.
   GruvboxVariant gruvbox = GruvboxVariant.soft;
@@ -89,7 +89,7 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    family = ThemeFamily.values.asNameMap()[prefs.getString(_familyKey)] ?? ThemeFamily.dynamic;
+    family = ThemeFamily.values.asNameMap()[prefs.getString(_familyKey)] ?? ThemeFamily.velksync;
     mode = ThemeMode.values.asNameMap()[prefs.getString(_modeKey)] ?? ThemeMode.system;
     gruvbox = GruvboxVariant.values.asNameMap()[prefs.getString(_gruvboxKey)] ?? GruvboxVariant.soft;
     catppuccin = CatppuccinFlavor.values.asNameMap()[prefs.getString(_catppuccinKey)] ?? CatppuccinFlavor.frappe;

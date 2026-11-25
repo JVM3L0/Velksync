@@ -27,7 +27,7 @@ abstract final class Motion {
 }
 
 /// Used when the phone has no wallpaper colors (Android < 12, iOS).
-const fallbackSeed = Color(0xFF4BA8E8); // gelo do ícone
+const fallbackSeed = Color(0xFFA8E0B7); // menta do ícone
 
 /// Wallpaper colors from Android come without the newer surface container
 /// roles, so the scheme is regenerated from their primary color.
@@ -72,6 +72,8 @@ ThemeData buildTheme(ColorScheme scheme, {RoleColors? roles}) {
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
+        backgroundColor: roles?.fill,
+        foregroundColor: roles?.onFill,
         minimumSize: const Size(0, 56),
         padding: const EdgeInsets.symmetric(horizontal: 28),
         shape: stadium,

@@ -8,6 +8,9 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 ### Alterado
 - Ícone novo, da marca Velk: cinco teclas em V com a de baixo em menta, no
   Android, iOS, Windows, Linux e na tela de abertura.
+- Tema Velk (neutros e pastéis da marca, com menta) no lugar do tema
+  "Velksync", e agora é o padrão do app e do widget. Quem já tinha escolhido
+  outro tema continua com ele.
 
 ### Adicionado
 - Ícone na bandeja do Linux (StatusNotifierItem, sem biblioteca nova): status,
