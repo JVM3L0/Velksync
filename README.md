@@ -202,7 +202,7 @@ Quando um celular pede para desligar, reiniciar ou suspender com alguém usando 
 
 **No Linux** o ícone usa o protocolo StatusNotifierItem, que KDE, waybar, Caelestia e o GNOME com a extensão AppIndicator entendem; o menu abre no clique e os avisos saem como notificações do desktop (`org.freedesktop.Notifications`). Sem host de bandeja o agente segue funcionando e o ícone aparece quando um subir. O menu é o do Windows menos o que depende de janela ou de área de transferência:
 - **Parear um celular…** abre o QR como imagem no visualizador da sessão (`xdg-open`); o arquivo fica em `$XDG_RUNTIME_DIR`, só para o seu usuário, e é apagado quando o código vence (5 min).
-- **Atualizar para X…** abre a página da versão; no Linux a atualização é à mão (`install-linux.sh` da versão nova).
+- **Atualizar para X…** instala a versão nova e reinicia o agente. Depois de confirmar na notificação, ele baixa o pacote, confere a assinatura, testa o binário novo e o troca (o anterior fica em `~/.local/bin/velksync-agent.old`). O sinal de presença roda como serviço do sistema, então o desktop pede sua senha (`pkexec`); se você cancelar, só ele fica na versão antiga. Os arquivos `.service` não são trocados: se uma versão mudar algum, as novidades dela vão pedir o `install-linux.sh`. Para voltar atrás: `mv ~/.local/bin/velksync-agent.old ~/.local/bin/velksync-agent && systemctl --user restart velksync-agent`.
 - Não existem **Enviar para o celular**, **Conferir Wake-on-LAN…** (use o `ethtool`, seção 1) e **Abrir o log** (use `journalctl --user -u velksync-agent -f`). A contagem antes de desligar também não: no Linux a energia é na hora.
 - **Sair do agente…** para o serviço com `systemctl --user stop velksync-agent`; ele volta no próximo login.
 
@@ -212,7 +212,7 @@ O agente guarda as últimas 200 ações em `history.json`, ao lado da config: qu
 
 ## 8.2 Atualizar o app
 
-O app procura versão nova uma vez por dia, ao abrir (desligue em **Configurações → Atualizações**, onde também fica **Procurar agora**). Havendo, aparece um cartão no topo da lista de PCs: **Atualizar** baixa o APK do processador do celular, só do GitHub e por HTTPS, confere com o `SHA256SUMS` e abre o instalador do Android. Na primeira vez o Android pede para liberar "Instalar apps desta fonte" para o Velksync. O Android só instala por cima um APK assinado com a mesma chave do app instalado, então um arquivo trocado é recusado por ele também. O app de desenvolvimento ("Velksync Dev") não se atualiza.
+O app procura versão nova uma vez por dia, ao abrir (desligue em **Configurações → Atualizações**, onde também fica **Procurar agora**). Havendo, aparece um cartão no topo da lista de PCs: **Atualizar** baixa o APK do processador do celular, só do GitHub e por HTTPS, confere com o `SHA256SUMS` e instala. Do Android 12 em diante a instalação costuma seguir sem tela de confirmação (se o sistema exigir, ela aparece); o app fecha ao instalar e, ao abrir de novo, avisa que atualizou. Essa dispensa vale a partir da atualização seguinte à versão que a trouxe. Na primeira vez o Android pede para liberar "Instalar apps desta fonte" para o Velksync. O Android só instala por cima um APK assinado com a mesma chave do app instalado, então um arquivo trocado é recusado por ele também. O app de desenvolvimento ("Velksync Dev") não se atualiza.
 
 ## 8.3 Primeira vez
 
@@ -282,7 +282,7 @@ A release assina o `SHA256SUMS` e confere com `agent/release_key.pem` antes de p
 | Presença | Desafio-resposta com HMAC e segredo próprio (derivado do token mestre); processo sem privilégios, sandbox no Linux, limite de respostas por IP. |
 | Bandeja | Nenhuma porta nova (no Linux, só o D-Bus da sessão): o menu faz o que a linha de comando já faz, como o seu usuário. A contagem antes de desligar só se cancela no próprio PC. Avisos mostram o nome do celular e do comando, nunca a saída. |
 | Troca de textos | Só entre celulares pareados e o PC. Link só `http(s)`; o resto é texto na área de transferência, nunca executado. O celular escolhe o PC antes de enviar; o PC avisa o que recebeu. O histórico guarda o fato, não o conteúdo. |
-| Atualizações | Agente e app só baixam do GitHub por HTTPS, com limite de tamanho. O agente só roda o instalador se o `SHA256SUMS` tiver a assinatura Ed25519 das releases e o arquivo bater; o Android só aceita APK com a mesma assinatura do app. Nada é instalado sem a pessoa confirmar no próprio aparelho. |
+| Atualizações | Agente e app só baixam do GitHub por HTTPS, com limite de tamanho. O agente só instala (no Windows, roda o instalador; no Linux, troca o binário) se o `SHA256SUMS` tiver a assinatura Ed25519 das releases e o arquivo bater; o Android só aceita APK com a mesma assinatura do app. Nada é instalado sem a pessoa confirmar no próprio aparelho. |
 | Widget e atalho | Só nome, MAC e estado; desligar sempre passa pelo app e pede confirmação. Componentes internos não exportados. |
 | Rede | Firewall liberado só para a sub-rede local (Windows: rede privada; Linux: `ufw`). |
 | Celular | Credenciais no Android Keystore (`flutter_secure_storage`), backup e transferência entre aparelhos desligados, sem HTTP em texto puro. |

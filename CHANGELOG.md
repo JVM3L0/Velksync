@@ -5,6 +5,20 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- Agente no Linux: **Atualizar para X…** agora instala a versão nova, com a
+  assinatura conferida, e reinicia o serviço. Esta primeira versão ainda é
+  instalada à mão com o `install-linux.sh`.
+- App: a atualização é instalada pelo próprio app, sem a tela de confirmação
+  onde o Android permite (12+), e avisa quando termina.
+
+### Corrigido
+- App: o download da atualização não fica mais parado para sempre, tenta de
+  novo quando a rede falha e reaproveita o APK já baixado. Os erros aparecem
+  em português claro.
+- Agente: tenta de novo as falhas passageiras do GitHub e explica o motivo
+  quando não consegue atualizar.
+
 ## [0.9.1] - 2026-11-25
 
 ### Alterado
