@@ -447,7 +447,12 @@ class _DeviceScreenState extends State<DeviceScreen> {
       // No Windows o caminho é o ícone do PC; o texto já diz.
       onHowTo: available != null && info.os == 'windows'
           ? null
-          : () => showUpdateSheet(context, gap: available != null ? VersionGap.agentOld : gap, os: info.os),
+          : () => showUpdateSheet(
+              context,
+              gap: available != null ? VersionGap.agentOld : gap,
+              os: info.os,
+              agentVersion: info.version,
+            ),
     );
   }
 

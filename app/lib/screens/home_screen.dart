@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../models/device.dart';
 import '../services/agent_client.dart';
 import '../services/app_update.dart';
+import '../services/versions.dart';
 import '../services/device_store.dart';
 import '../services/pc_events.dart';
 import '../services/pc_probe.dart';
@@ -49,6 +50,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   AppRelease? _appUpdate;
   double? _updateProgress; // 0 a 1 enquanto baixa
   String? _updateError;
+  bool _installing = false;
+  Timer? _installTimeout;
 
   @override
   void initState() {
@@ -57,6 +60,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _wakes.addListener(_onWake);
     _load();
     _checkAppUpdate();
+    if (AppUpdater.supported) {
+      // A confirmação do sistema segue sozinha: o cartão volta ao botão, para
+      // não ficar preso se ela for fechada sem resposta.
+      AppUpdater.onInstallStatus(onConfirm: _installIdle, onFailed: _updateFailed);
+      _tellUpdated();
+    }
     ShareBridge.onShared(_sendShared);
   }
 
@@ -66,6 +75,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _wakes.removeListener(_onWake);
     _poll?.cancel();
     _events.dispose();
+    _installTimeout?.cancel();
+    if (AppUpdater.supported) AppUpdater.onInstallStatus();
     super.dispose();
   }
 
@@ -340,9 +351,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) setState(() => _appUpdate = r);
   }
 
+  Future<void> _tellUpdated() async {
+    if (!await _updater.takeUpdated() || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Atualizado para $appVersion')));
+  }
+
+  void _installIdle() {
+    _installTimeout?.cancel();
+    if (mounted) setState(() => _installing = false);
+  }
+
   Future<void> _installAppUpdate() async {
     final r = _appUpdate;
-    if (r == null || _updateProgress != null) return;
+    if (r == null || _updateProgress != null || _installing) return;
     setState(() {
       _updateProgress = 0;
       _updateError = null;
@@ -359,22 +380,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         },
       );
       if (!mounted) return;
-      setState(() => _updateProgress = null);
+      setState(() {
+        _updateProgress = null;
+        _installing = true;
+      });
+      await _updater.markInstalling();
+      _installTimeout = Timer(const Duration(seconds: 90), () => _updateFailed('O Android não respondeu'));
       if (!await AppUpdater.install(apk) && mounted) {
+        _installIdle();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Libere "Instalar apps desta fonte" para o Velksync e toque em Atualizar de novo'),
           ),
         );
       }
-    } on Exception catch (e) {
-      if (mounted) {
-        setState(() {
-          _updateProgress = null;
-          _updateError = 'Não deu para atualizar: $e';
-        });
-      }
+    } on UpdateException catch (e) {
+      _updateFailed(e.message);
+    } on PlatformException {
+      _updateFailed('O Android não abriu o instalador');
+    } on Exception {
+      _updateFailed('Erro inesperado. Dá para baixar pela página de versões');
     }
+  }
+
+  void _updateFailed(String why) {
+    _installTimeout?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _installing = false;
+      _updateProgress = null;
+      _updateError = 'Não deu para atualizar: $why';
+    });
   }
 
   Widget? _appUpdateCard() {
@@ -383,6 +419,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return AppUpdateCard(
       release: r,
       progress: _updateProgress,
+      installing: _installing,
       error: _updateError,
       onUpdate: _installAppUpdate,
       onDismiss: () async {

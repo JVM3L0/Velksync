@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -78,7 +79,10 @@ Map<String, String> parseSums(String text) => {
 
 class UpdateException implements Exception {
   final String message;
-  UpdateException(this.message);
+
+  /// Falha passageira (rede, servidor): vale tentar de novo.
+  final bool transient;
+  UpdateException(this.message, {this.transient = false});
   @override
   String toString() => message;
 }
@@ -87,16 +91,25 @@ class UpdateException implements Exception {
 /// A garantia final é do Android: ele só instala por cima um APK assinado
 /// com a mesma chave do app instalado.
 class AppUpdater {
-  AppUpdater({http.Client? client, DateTime Function()? now, this.current = appVersion})
-    : _http = client ?? http.Client(),
-      _now = now ?? DateTime.now;
+  AppUpdater({
+    http.Client? client,
+    DateTime Function()? now,
+    this.current = appVersion,
+    this.backoff = const Duration(seconds: 2),
+    this.stall = const Duration(seconds: 30),
+  }) : _http = client ?? http.Client(),
+       _now = now ?? DateTime.now;
 
   final http.Client _http;
   final DateTime Function() _now;
   final String current;
 
+  /// Espera antes de tentar de novo, e quanto o download pode ficar parado.
+  final Duration backoff, stall;
+
   static const enabledKey = 'update_check';
   static const _checkedKey = 'update_checked_at', _releaseKey = 'update_release', _dismissedKey = 'update_dismissed';
+  static const _fromKey = 'update_installing_from';
   static const _api = 'https://api.github.com/repos/JVM3L0/Velksync/releases/latest';
   static const _channel = MethodChannel('velksync/update');
 
@@ -124,10 +137,15 @@ class AppUpdater {
           }
           await prefs.setInt(_checkedKey, _now().millisecondsSinceEpoch);
         } else if (force) {
-          throw UpdateException('O GitHub respondeu ${res.statusCode}');
+          throw _statusError(res.statusCode, res.headers);
         }
       } on UpdateException {
         rethrow;
+      } on FormatException {
+        if (force) throw UpdateException('Resposta inesperada do GitHub');
+      } on TypeError {
+        // JSON válido com outro formato (portal de Wi-Fi, proxy).
+        if (force) throw UpdateException('Resposta inesperada do GitHub');
       } on Exception {
         // Sem internet: tenta na próxima vez que abrir (ou avisa, no manual).
         if (force) throw UpdateException('Sem conexão com o GitHub');
@@ -148,6 +166,8 @@ class AppUpdater {
       return AppRelease.fromGitHub(jsonDecode(raw) as Map<String, dynamic>);
     } on FormatException {
       return null;
+    } on TypeError {
+      return null;
     }
   }
 
@@ -155,7 +175,9 @@ class AppUpdater {
   Future<void> dismiss(String version) async =>
       (await SharedPreferences.getInstance()).setString(_dismissedKey, version);
 
-  /// Baixa o APK do processador do celular e confere com o SHA256SUMS.
+  /// Baixa o APK do processador do celular e confere com o SHA256SUMS. Um APK
+  /// já baixado e íntegro é reaproveitado (depois de liberar a permissão de
+  /// instalar, por exemplo). Falha sempre como [UpdateException].
   Future<File> download(
     AppRelease r, {
     required List<String> abis,
@@ -166,27 +188,72 @@ class AppUpdater {
     final apk = name == null ? null : r.assets[name];
     final sumsAsset = r.assets['SHA256SUMS'];
     if (apk == null || sumsAsset == null) throw UpdateException('Esta versão não tem APK para este celular');
-    final sums = parseSums(utf8.decode(await _get(sumsAsset.url, maxBytes: 64 << 10)));
-    final want = sums[name];
-    if (want == null) throw UpdateException('$name não está no SHA256SUMS');
+    try {
+      final sumsBytes = await _retry(() => _get(sumsAsset.url, maxBytes: 64 << 10));
+      final want = parseSums(utf8.decode(sumsBytes, allowMalformed: true))[name];
+      if (want == null) throw UpdateException('$name não está no SHA256SUMS');
 
-    await dir.create(recursive: true);
-    for (final old in dir.listSync().whereType<File>()) {
-      old.deleteSync();
+      await dir.create(recursive: true);
+      final file = File('${dir.path}/$name');
+      for (final old in dir.listSync().whereType<File>()) {
+        if (old.uri.pathSegments.last != name) old.deleteSync();
+      }
+      if (file.existsSync()) {
+        if ((await sha256.bind(file.openRead()).first).toString() == want) return file;
+        file.deleteSync();
+      }
+
+      // Só ganha o nome final depois de conferido.
+      final part = File('${file.path}.part');
+      try {
+        final digest = await _retry(() => _stream(apk.url, part, total: apk.size, onProgress: onProgress));
+        if (digest != want) throw UpdateException('O arquivo baixado não confere com o SHA256SUMS');
+        return await part.rename(file.path);
+      } finally {
+        if (part.existsSync()) part.deleteSync();
+      }
+    } on FileSystemException {
+      throw UpdateException('Não deu para gravar o arquivo. Veja se há espaço livre no celular');
     }
-    final file = File('${dir.path}/$name');
-    final digest = await _stream(apk.url, file, total: apk.size, onProgress: onProgress);
-    if (digest != want) {
-      await file.delete();
-      throw UpdateException('O arquivo baixado não confere com o SHA256SUMS');
+  }
+
+  /// Repete só as falhas passageiras, esperando um pouco mais a cada vez, e
+  /// traduz os erros de rede.
+  Future<T> _retry<T>(Future<T> Function() f) async {
+    for (var attempt = 1; ; attempt++) {
+      UpdateException error;
+      try {
+        return await f();
+      } on UpdateException catch (e) {
+        error = e;
+      } on TimeoutException {
+        error = UpdateException('A conexão ficou parada. Tente de novo', transient: true);
+      } on SocketException {
+        error = UpdateException('Sem conexão com o GitHub', transient: true);
+      } on HttpException {
+        error = UpdateException('A conexão caiu no meio do download', transient: true);
+      } on http.ClientException {
+        error = UpdateException('A conexão caiu no meio do download', transient: true);
+      } on TlsException {
+        error = UpdateException('Conexão segura recusada. Confira a data do celular e o Wi-Fi');
+      }
+      if (!error.transient || attempt == 3) throw error;
+      await Future<void>.delayed(backoff * attempt);
     }
-    return file;
+  }
+
+  static UpdateException _statusError(int status, Map<String, String> headers) {
+    if (status == 429 || (status == 403 && headers['x-ratelimit-remaining'] == '0')) {
+      return UpdateException('O GitHub limitou as consultas. Tente de novo em uma hora');
+    }
+    if (status >= 500) return UpdateException('O GitHub está fora do ar ($status)', transient: true);
+    return UpdateException('O GitHub respondeu $status');
   }
 
   Future<List<int>> _get(String url, {required int maxBytes}) async {
     final res = await _send(url);
     final bytes = <int>[];
-    await for (final chunk in res.stream) {
+    await for (final chunk in res.stream.timeout(stall)) {
       bytes.addAll(chunk);
       if (bytes.length > maxBytes) throw UpdateException('Resposta grande demais');
     }
@@ -205,19 +272,27 @@ class AppUpdater {
     final hasher = sha256.startChunkedConversion(hash);
     var received = 0;
     try {
-      await for (final chunk in res.stream) {
-        received += chunk.length;
-        if (received > 200 << 20) throw UpdateException('APK grande demais');
-        hasher.add(chunk);
-        out.add(chunk);
-        onProgress?.call(received, total);
-      }
+      // addStream respeita a velocidade do disco e entrega os erros de gravação.
+      await out.addStream(
+        res.stream.timeout(stall).map((chunk) {
+          received += chunk.length;
+          if (received > 200 << 20) throw UpdateException('APK grande demais');
+          hasher.add(chunk);
+          onProgress?.call(received, total);
+          return chunk;
+        }),
+      );
+      await out.flush();
     } finally {
       hasher.close();
       await out.close();
     }
+    if (total > 0 && received < total) throw UpdateException('O download veio incompleto', transient: true);
     return hash.value.toString();
   }
+
+  /// Larga o corpo sem esperar por ele: um proxy pode nunca terminar de mandar.
+  static void _discard(http.StreamedResponse res) => unawaited(res.stream.listen(null).cancel());
 
   /// GET seguindo redirecionamentos só dentro do GitHub.
   Future<http.StreamedResponse> _send(String url) async {
@@ -225,15 +300,18 @@ class AppUpdater {
     for (var hop = 0; hop < 5; hop++) {
       if (!downloadUrlOk(uri)) throw UpdateException('Endereço de download fora do GitHub');
       final req = http.Request('GET', uri)..followRedirects = false;
-      final res = await _http.send(req).timeout(const Duration(seconds: 30));
+      final res = await _http.send(req).timeout(stall);
       if (res.isRedirect || (res.statusCode >= 300 && res.statusCode < 400)) {
         final loc = res.headers['location'];
-        await res.stream.drain<void>();
+        _discard(res);
         if (loc == null) break;
         uri = uri.resolve(loc);
         continue;
       }
-      if (res.statusCode != 200) throw UpdateException('Download falhou (${res.statusCode})');
+      if (res.statusCode != 200) {
+        _discard(res);
+        throw _statusError(res.statusCode, res.headers);
+      }
       return res;
     }
     throw UpdateException('Redirecionamentos demais');
@@ -245,9 +323,40 @@ class AppUpdater {
   /// Pasta própria para o APK (a única que o instalador do Android pode ler).
   static Future<Directory> downloadDir() async => Directory((await _channel.invokeMethod<String>('dir'))!);
 
-  /// Abre o instalador do Android. false: falta liberar "instalar apps
-  /// desta fonte" (o app abre essa tela; depois é só tocar de novo).
+  /// Entrega o APK ao Android. false: falta liberar "instalar apps desta
+  /// fonte" (o app abre essa tela; depois é só tocar de novo). Dando certo, o
+  /// Android encerra o app; o resto chega em [onInstallStatus].
   static Future<bool> install(File apk) async => (await _channel.invokeMethod<bool>('install', {'path': apk.path}))!;
+
+  /// [onConfirm]: o Android abriu a tela de confirmação. [onFailed]: não
+  /// instalou, com o motivo. null nos dois para parar de ouvir.
+  static void onInstallStatus({void Function()? onConfirm, void Function(String why)? onFailed}) {
+    _channel.setMethodCallHandler(
+      onConfirm == null && onFailed == null
+          ? null
+          : (call) async {
+              if (call.method != 'status') return;
+              final args = call.arguments as Map;
+              if (args['status'] == 'confirm') {
+                onConfirm?.call();
+              } else {
+                onFailed?.call(args['message'] as String? ?? 'O Android não conseguiu instalar');
+              }
+            },
+    );
+  }
+
+  /// Marca que uma instalação começou a partir desta versão.
+  Future<void> markInstalling() async => (await SharedPreferences.getInstance()).setString(_fromKey, current);
+
+  /// true uma única vez, ao abrir já na versão nova instalada pelo app.
+  Future<bool> takeUpdated() async {
+    final prefs = await SharedPreferences.getInstance();
+    final from = prefs.getString(_fromKey);
+    if (from == null || !isNewerVersion(current, from)) return false;
+    await prefs.remove(_fromKey);
+    return true;
+  }
 }
 
 class _DigestSink implements Sink<Digest> {

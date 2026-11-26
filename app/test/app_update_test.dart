@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -172,6 +173,45 @@ void main() {
     expect(find.text('Atualizar'), findsNothing);
   });
 
+  testWidgets('cartão instalando: avisa que o app vai fechar e não tem botões', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppUpdateCard(
+            release: AppRelease.fromGitHub(_release()),
+            installing: true,
+            onDismiss: () {},
+            onUpdate: () {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Velksync 0.6.0'), findsOneWidget);
+    expect(find.text('Instalando… o app vai fechar'), findsOneWidget);
+    expect(find.textContaining('Novidades'), findsNothing);
+    expect(find.text('Atualizar'), findsNothing);
+  });
+
+  test('"Atualizado" aparece uma vez, só se a versão subiu', () async {
+    await AppUpdater(current: '0.5.0').markInstalling();
+    expect(await AppUpdater(current: '0.5.0').takeUpdated(), isFalse, reason: 'não instalou');
+    expect(await AppUpdater(current: '0.6.0').takeUpdated(), isTrue);
+    expect(await AppUpdater(current: '0.6.0').takeUpdated(), isFalse);
+  });
+
+  testWidgets('Linux: agente novo aponta para o ícone; antigo, para o instalador', (tester) async {
+    for (final (version, text) in [('0.10.0', 'bandeja'), ('0.9.1', 'install-linux.sh')]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: UpdateSheet(key: ValueKey(version), gap: VersionGap.agentOld, os: 'linux', agentVersion: version),
+          ),
+        ),
+      );
+      expect(find.textContaining(text), findsWidgets);
+    }
+  });
+
   testWidgets('aviso do agente com versão nova: no Windows aponta para o ícone', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -216,5 +256,83 @@ void main() {
       current: '0.5.0',
     );
     await expectLater(offline.check(force: true), throwsA(isA<UpdateException>()));
+  });
+
+  group('erros', () {
+    late Directory dir;
+    setUp(() => dir = Directory.systemTemp.createTempSync('velksync-update'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    final r = AppRelease.fromGitHub(_release());
+    final sums = '${sha256.convert([1, 2, 3])}  velksync-v0.6.0-arm64.apk\n';
+
+    /// [apk] responde cada pedido do APK, pelo número da tentativa.
+    (AppUpdater, int Function()) make(Future<http.Response> Function(int attempt) apk) {
+      var calls = 0;
+      final u = AppUpdater(
+        current: '0.5.0',
+        backoff: Duration.zero,
+        client: MockClient((req) async {
+          if (req.url.path.endsWith('SHA256SUMS')) return http.Response(sums, 200);
+          return apk(++calls);
+        }),
+      );
+      return (u, () => calls);
+    }
+
+    Future<File> get(AppUpdater u) => u.download(r, abis: ['arm64-v8a'], dir: dir);
+    Matcher fails(String text) => throwsA(isA<UpdateException>().having((e) => e.message, 'message', contains(text)));
+    final ok = http.Response.bytes([1, 2, 3], 200);
+
+    test('tenta de novo falha passageira e download incompleto', () async {
+      final (u, calls) = make(
+        (n) async => switch (n) {
+          1 => throw const SocketException('caiu'),
+          2 => http.Response.bytes([1], 200),
+          _ => ok,
+        },
+      );
+      expect((await get(u)).readAsBytesSync(), [1, 2, 3]);
+      expect(calls(), 3);
+    });
+
+    test('desiste na terceira, com mensagem legível e sem sobras', () async {
+      final (u, calls) = make((_) async => http.Response('', 502));
+      await expectLater(get(u), fails('fora do ar'));
+      expect(calls(), 3);
+      expect(dir.listSync(), isEmpty);
+    });
+
+    test('limite do GitHub não repete', () async {
+      final (u, calls) = make((_) async => http.Response('', 429));
+      await expectLater(get(u), fails('limitou'));
+      expect(calls(), 1);
+    });
+
+    test('erro ou redirecionamento com corpo que nunca termina não trava', () async {
+      for (final (status, text) in [(502, 'fora do ar'), (302, 'Redirecionamentos')]) {
+        final u = AppUpdater(
+          current: '0.5.0',
+          backoff: Duration.zero,
+          client: MockClient.streaming(
+            (_, _) async => http.StreamedResponse(StreamController<List<int>>().stream, status),
+          ),
+        );
+        await expectLater(get(u).timeout(const Duration(seconds: 5)), fails(text));
+      }
+    });
+
+    test('reaproveita o APK já conferido', () async {
+      final (u, calls) = make((_) async => ok);
+      await get(u);
+      await get(u);
+      expect(calls(), 1);
+    });
+
+    test('resposta com outro formato não derruba a checagem', () async {
+      final u = AppUpdater(client: MockClient((_) async => http.Response('[1]', 200)), current: '0.5.0');
+      expect(await u.check(), isNull);
+      await expectLater(u.check(force: true), fails('inesperada'));
+    });
   });
 }
