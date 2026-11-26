@@ -1,0 +1,37 @@
+# Só para compilar e testar o app, sem instalar nada no sistema. Versões iguais
+# às do CI (.github/workflows/ci.yml); ao mudar lá, mudar aqui.
+# Use pelo tools/android/build.sh.
+FROM docker.io/library/eclipse-temurin:17-jdk-noble
+
+# Aceitar a licença do Android SDK é decisão de quem constrói a imagem.
+ARG ACCEPT_ANDROID_LICENSES=no
+ARG FLUTTER_VERSION=3.47.8
+ARG CMDLINE_TOOLS=13114758
+ARG ANDROID_PLATFORM=36
+ARG BUILD_TOOLS=36.0.0
+ARG NDK_VERSION=28.2.13676358
+
+ENV ANDROID_HOME=/opt/android-sdk
+# No podman sem root, o tar não pode restaurar o dono gravado nos pacotes.
+ENV TAR_OPTIONS=--no-same-owner
+ENV PATH=/opt/flutter/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git curl unzip xz-utils zip \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN test "$ACCEPT_ANDROID_LICENSES" = yes \
+ || { echo "Leia https://developer.android.com/studio/terms e use --accept-android-licenses"; exit 1; }
+
+RUN curl -fsSL -o /tmp/tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS}_latest.zip" \
+ && mkdir -p "$ANDROID_HOME/cmdline-tools" \
+ && unzip -q /tmp/tools.zip -d "$ANDROID_HOME/cmdline-tools" \
+ && mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest" \
+ && rm /tmp/tools.zip \
+ && yes | sdkmanager --licenses >/dev/null \
+ && sdkmanager "platform-tools" "platforms;android-${ANDROID_PLATFORM}" "build-tools;${BUILD_TOOLS}" "ndk;${NDK_VERSION}" \
+    "platforms;android-35" "cmake;3.22.1" >/dev/null  # pedidos por plugins
+
+RUN git clone -q --depth 1 -b "$FLUTTER_VERSION" https://github.com/flutter/flutter.git /opt/flutter \
+ && flutter --suppress-analytics config --no-analytics >/dev/null \
+ && flutter precache --android --no-ios

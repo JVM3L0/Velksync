@@ -244,6 +244,8 @@ Use um **celular de verdade no mesmo Wi-Fi**. O emulador Android fica atrás de 
 
 **iOS**: a conexão com o agente funciona. Já broadcast UDP (WoL e descoberta) exige o entitlement `com.apple.developer.networking.multicast`, que a Apple precisa aprovar. Até lá, cadastre o IP manualmente; o botão Ligar não vai funcionar.
 
+Sem Flutter nem Android SDK instalados, `tools/android/build.sh` testa e compila num container podman, com as versões do CI; o APK de depuração sai em `app/build/podman/`. Na primeira vez (e para reconstruir a imagem, de uns 5,5 GB) passe `--accept-android-licenses`, que aceita as [licenças do Android SDK](https://developer.android.com/studio/terms).
+
 ## Releases
 
 Cada tag `vX.Y.Z` enviada ao GitHub dispara o workflow `.github/workflows/release.yml`, que testa tudo e publica na página de Releases: APKs assinados, um por processador (no celular, baixe o **`-arm64.apk`**; aparelhos antigos, o `-armv7.apk`), agente para Linux (`.tar.gz`) e Windows (instalador `velksync-setup-….exe` e `.zip`), `SHA256SUMS`, `SHA256SUMS.sig` (assinatura Ed25519, que o atualizador do agente exige) e atestado de proveniência (repositórios públicos). As novidades da página vêm da seção da versão no `CHANGELOG.md`. A tag precisa bater com a versão em `agent/main.go` e `app/pubspec.yaml`.
