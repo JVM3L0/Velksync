@@ -5,6 +5,8 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.10.0] - 2026-11-26
+
 ### Adicionado
 - Agente no Linux: **Atualizar para X…** agora instala a versão nova, com a
   assinatura conferida, e reinicia o serviço. Esta primeira versão ainda é
