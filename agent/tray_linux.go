@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -60,6 +61,7 @@ type linuxTray struct {
 	rev         uint32
 	menuDevices []PairedDevice
 	waiters     map[uint32]chan string // notificações esperando resposta
+	updating    atomic.Bool
 }
 
 var _ desktop = (*linuxTray)(nil)
@@ -295,10 +297,26 @@ func (t *linuxTray) notify(title, text string, actions []string, timeoutMs int32
 // confirm mostra um aviso com um botão de ação e espera a resposta (ou o
 // aviso sumir). Só a ação explícita vale como "sim".
 func (t *linuxTray) confirm(title, text, action string) bool {
-	id, err := t.notify(title, text, []string{"yes", action, "no", "Cancelar"}, 30000)
+	key, err := t.ask(title, text, action)
 	if err != nil {
 		log.Printf("bandeja: confirmação: %v", err)
-		return false
+	}
+	return key == "yes"
+}
+
+// ask devolve "yes", "no" ou "" (o aviso sumiu sem resposta); erro quando nem
+// dá para perguntar.
+func (t *linuxTray) ask(title, text, action string) (string, error) {
+	var caps []string
+	if err := t.conn.Object(notifyName, notifyPath).Call(notifyName+".GetCapabilities", 0).Store(&caps); err != nil {
+		return "", err
+	}
+	if !slices.Contains(caps, "actions") {
+		return "", errors.New("as notificações deste desktop não têm botões")
+	}
+	id, err := t.notify(title, text, []string{"yes", action, "no", "Cancelar"}, 30000)
+	if err != nil {
+		return "", err
 	}
 	ch := make(chan string, 1)
 	t.mu.Lock()
@@ -306,12 +324,12 @@ func (t *linuxTray) confirm(title, text, action string) bool {
 	t.mu.Unlock()
 	select {
 	case key := <-ch:
-		return key == "yes"
+		return key, nil
 	case <-time.After(35 * time.Second):
 		t.mu.Lock()
 		delete(t.waiters, id)
 		t.mu.Unlock()
-		return false
+		return "", nil
 	}
 }
 
@@ -324,7 +342,8 @@ func (t *linuxTray) state() trayState {
 	notices := s.cfg.trayNotices()
 	updateCheck := s.cfg.updateCheck()
 	s.mu.Unlock()
-	st := trayState{Version: version, Devices: devices, Notices: notices, UpdateCheck: updateCheck, NoSend: true}
+	st := trayState{Version: version, Devices: devices, Notices: notices, UpdateCheck: updateCheck, NoSend: true,
+		Updating: t.updating.Load()}
 	if s.schedule != nil {
 		st.Schedule = s.schedule.Current()
 	}
@@ -413,11 +432,7 @@ func (t *linuxTray) command(cmd int) {
 	case cmd == menuCheckUpdates:
 		go t.checkUpdatesNow()
 	case cmd == menuUpdate:
-		if r, ok := s.updates.Pending(); ok && strings.HasPrefix(r.Page, releasesPage) {
-			exec.Command("xdg-open", r.Page).Start()
-		} else {
-			exec.Command("xdg-open", releasesPage+"latest").Start()
-		}
+		go t.offerUpdate()
 	case cmd == menuHistory:
 		go t.showHistory()
 	case cmd == menuConfig:
@@ -444,9 +459,96 @@ func (t *linuxTray) checkUpdatesNow() {
 	case err != nil:
 		t.Notify("Não deu para procurar atualizações", err.Error())
 	case newer:
-		t.Notify("Velksync "+r.Version()+" disponível", "Baixe a versão nova na página de versões e rode o install-linux.sh.")
+		t.Notify("Velksync "+r.Version()+" disponível", "Para instalar: Atualizar para "+r.Version()+"… no menu do ícone.")
+		if t.rebuild() {
+			t.emitLayoutUpdated()
+		}
 	default:
 		t.Notify("Nenhuma atualização", "O Velksync "+version+" é a versão mais recente (última publicada: "+r.Version()+").")
+	}
+}
+
+// openReleases é a saída quando não dá para instalar sozinho.
+func (t *linuxTray) openReleases(r releaseInfo) {
+	page := releasesPage + "latest"
+	if strings.HasPrefix(r.Page, releasesPage) {
+		page = r.Page
+	}
+	if err := exec.Command("xdg-open", page).Start(); err != nil {
+		t.Notify("Baixe a versão nova", page)
+	}
+}
+
+// offerUpdate pede a confirmação, instala a versão nova e reinicia o agente.
+func (t *linuxTray) offerUpdate() {
+	if !t.updating.CompareAndSwap(false, true) {
+		return
+	}
+	defer func() {
+		t.updating.Store(false)
+		if t.rebuild() {
+			t.emitLayoutUpdated()
+		}
+	}()
+	s := t.srv
+	r, ok := s.updates.Pending()
+	if !ok {
+		return
+	}
+	target, err := updateTarget()
+	if err != nil {
+		log.Printf("atualização: %v", err)
+		t.Notify("Atualize pela página de versões", err.Error())
+		t.openReleases(r)
+		return
+	}
+	text := releaseNotes(r, 300)
+	if hasPresence() {
+		text += "\n\nO sistema vai pedir sua senha para atualizar o sinal de presença."
+	}
+	switch key, err := t.ask("Instalar o Velksync "+r.Version()+"?", text, "Atualizar"); {
+	case err != nil:
+		log.Printf("atualização: confirmação: %v", err)
+		t.Notify("Atualize pela página de versões", err.Error())
+		t.openReleases(r)
+		return
+	case key == "":
+		// Pode ter sido ignorado, ou o desktop não desenhou os botões.
+		t.Notify("Nada foi instalado", "Sem resposta. Se não apareceram botões, baixe em "+releasesPage+"latest")
+		return
+	case key != "yes":
+		return
+	}
+	if t.rebuild() {
+		t.emitLayoutUpdated()
+	}
+	t.Notify("Baixando o Velksync "+r.Version(), "O agente reinicia sozinho ao terminar.")
+	bin, err := s.updates.fetchLinuxBinary(r)
+	if err == nil {
+		err = replaceBinary(target, bin, r.Version())
+	}
+	if err != nil {
+		log.Printf("atualização: %v", err)
+		t.Notify("Não deu para atualizar", err.Error()+". Nada foi instalado.")
+		return
+	}
+	log.Printf("atualização: %s instalado em %s (assinatura conferida)", r.Version(), target)
+	s.history.Add("Este PC", histUpdate, "instalou a versão "+r.Version(), false)
+	if hasPresence() {
+		if err := updatePresence(bin); err != nil {
+			fix := fmt.Sprintf("sudo install -m 755 '%s' %s && sudo systemctl restart velksync-presence",
+				strings.ReplaceAll(target, "'", `'\''`), presenceBinary)
+			log.Printf("atualização: presença: %v. Para atualizar: %s", err, fix)
+			// Sem prazo: o comando precisa dar tempo de copiar.
+			if _, nerr := t.notify("O sinal de presença ficou na versão antiga",
+				err.Error()+". Para atualizar: "+fix, nil, 0); nerr != nil {
+				log.Printf("bandeja: aviso: %v", nerr)
+			}
+		}
+	}
+	if err := restartAgent(); err != nil {
+		log.Printf("atualização: reinício: %v", err)
+		t.Notify("Velksync "+r.Version()+" instalado", "Falta reiniciar o agente: "+err.Error())
 	}
 }
 

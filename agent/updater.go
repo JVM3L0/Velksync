@@ -171,6 +171,7 @@ type updater struct {
 	fetch     func() (releaseInfo, error)
 	now       func() time.Time
 	client    *http.Client
+	backoff   time.Duration // espera antes de tentar de novo
 
 	mu       sync.Mutex
 	latest   releaseInfo
@@ -180,10 +181,10 @@ type updater struct {
 func newUpdater(configPath string, enabled func() bool, onNew func(releaseInfo)) *updater {
 	u := &updater{
 		statePath: filepath.Join(filepath.Dir(configPath), "update.json"),
-		enabled:   enabled, onNew: onNew, now: time.Now,
+		enabled:   enabled, onNew: onNew, now: time.Now, backoff: 2 * time.Second,
 		client: &http.Client{Timeout: 2 * time.Minute, CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			if len(via) > 5 || !downloadURLOK(r.URL) {
-				return errors.New("redirecionamento para fora do GitHub")
+				return errOutsideGitHub
 			}
 			return nil
 		}},
@@ -252,7 +253,9 @@ func (u *updater) refresh() (releaseInfo, error) {
 	u.latest = r
 	u.mu.Unlock()
 	if data, err := json.Marshal(r); err == nil {
-		os.WriteFile(u.statePath, data, 0o600)
+		if err := os.WriteFile(u.statePath, data, 0o600); err != nil {
+			log.Printf("atualização: não guardei o resultado: %v", err)
+		}
 	}
 	return r, nil
 }
@@ -282,21 +285,75 @@ func (u *updater) Loop() {
 	}
 }
 
-func (u *updater) fetchLatest() (releaseInfo, error) {
-	req, _ := http.NewRequest("GET", releasesAPI, nil)
-	req.Header.Set("Accept", "application/vnd.github+json")
+var errOutsideGitHub = errors.New("redirecionamento para fora do GitHub")
+
+// transientError é uma falha que vale tentar de novo (rede, servidor).
+type transientError struct{ error }
+
+func (e transientError) Unwrap() error { return e.error }
+
+// retry repete f só nas falhas passageiras, esperando um pouco mais a cada vez.
+func (u *updater) retry(f func() error) error {
+	var err error
+	for attempt := 1; ; attempt++ {
+		err = f()
+		var t transientError
+		if attempt == 3 || !errors.As(err, &t) {
+			return err
+		}
+		time.Sleep(time.Duration(attempt) * u.backoff)
+	}
+}
+
+// get faz um GET no GitHub e traduz as falhas para quem vai ler o aviso.
+func (u *updater) get(link, accept string, limit int64) ([]byte, error) {
+	req, err := http.NewRequest("GET", link, nil)
+	if err != nil {
+		return nil, err
+	}
+	if accept != "" {
+		req.Header.Set("Accept", accept)
+	}
 	req.Header.Set("User-Agent", "velksync-agent/"+version)
 	res, err := u.client.Do(req)
+	if errors.Is(err, errOutsideGitHub) {
+		return nil, errors.New("a rede desviou o download para fora do GitHub (portal de Wi-Fi?)")
+	}
+	if err != nil {
+		return nil, transientError{fmt.Errorf("sem conexão com o GitHub: %w", err)}
+	}
+	defer res.Body.Close()
+	switch {
+	case res.StatusCode == http.StatusTooManyRequests,
+		res.StatusCode == http.StatusForbidden && res.Header.Get("X-RateLimit-Remaining") == "0":
+		return nil, errors.New("o GitHub limitou as consultas; tente de novo em uma hora")
+	case res.StatusCode >= 500:
+		return nil, transientError{fmt.Errorf("o GitHub está fora do ar (%s)", res.Status)}
+	case res.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("o GitHub respondeu %s", res.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	if err != nil {
+		return nil, transientError{fmt.Errorf("a conexão caiu no meio do download: %w", err)}
+	}
+	if int64(len(data)) > limit {
+		return nil, errors.New("resposta grande demais")
+	}
+	return data, nil
+}
+
+func (u *updater) fetchLatest() (releaseInfo, error) {
+	var data []byte
+	err := u.retry(func() (err error) {
+		data, err = u.get(releasesAPI, "application/vnd.github+json", 1<<20)
+		return err
+	})
 	if err != nil {
 		return releaseInfo{}, err
 	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return releaseInfo{}, fmt.Errorf("GitHub respondeu %s", res.Status)
-	}
 	var r releaseInfo
-	if err := json.NewDecoder(io.LimitReader(res.Body, 1<<20)).Decode(&r); err != nil {
-		return releaseInfo{}, err
+	if err := json.Unmarshal(data, &r); err != nil {
+		return releaseInfo{}, fmt.Errorf("resposta inesperada do GitHub: %w", err)
 	}
 	if r.Draft || r.Pre {
 		return releaseInfo{}, errors.New("a última release é rascunho ou pré-versão")
@@ -315,22 +372,13 @@ func (u *updater) download(a releaseAsset, limit int64) ([]byte, error) {
 	if a.Size > limit {
 		return nil, fmt.Errorf("%s grande demais", a.Name)
 	}
-	req, _ := http.NewRequest("GET", link.String(), nil)
-	req.Header.Set("User-Agent", "velksync-agent/"+version)
-	res, err := u.client.Do(req)
+	var data []byte
+	err = u.retry(func() (err error) {
+		data, err = u.get(link.String(), "", limit)
+		return err
+	})
 	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s: %s", a.Name, res.Status)
-	}
-	data, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) > limit {
-		return nil, fmt.Errorf("%s grande demais", a.Name)
+		return nil, fmt.Errorf("%s: %w", a.Name, err)
 	}
 	return data, nil
 }
