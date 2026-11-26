@@ -5,6 +5,9 @@ versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Alterado
+- Ícone com as teclas maiores, para ler melhor em tamanho pequeno.
+
 ## [0.9.0] - 2026-11-25
 
 ### Alterado

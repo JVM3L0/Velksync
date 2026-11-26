@@ -15,18 +15,22 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 INK, PAPER, MENTA = "#1b1a1e", "#f6f4f1", "#a8e0b7"
-# Cantos superiores esquerdos das teclas num quadro de 48; a do meio é a de baixo.
-KEYS = [(0.2, 10.0), (10.0, 19.8), (19.8, 29.6), (29.6, 19.8), (39.4, 10.0)]
-SCALE = 1.08  # quadro de 48 dentro do miolo 72x72 do ícone adaptativo (canvas 108)
+# Cantos superiores esquerdos das teclas num tile de 100; a do meio é a de baixo.
+KEYS = [(7.0, 17.5), (23.25, 39.5), (39.5, 61.5), (55.75, 39.5), (72.0, 17.5)]
+SIDE = 21.0
+FULL = 0.72  # tile de 100 no miolo 72x72 do ícone adaptativo (canvas 108)
+# No Android o launcher recorta em círculo: o V precisa caber no raio seguro de 33.
+SAFE = 0.64
 
 
-def layers():
+def layers(scale=FULL):
     """(x, y, lado_x, lado_y, raio, cor, opacidade) no canvas de 108."""
+    unit = SIDE / 8.4  # a tecla é desenhada com 8,4 de lado
     for i, (x, y) in enumerate(KEYS):
         color = MENTA if i == 2 else PAPER
         for dx, dy, w, h, r, alpha in ((0, 0, 8.4, 8.4, 2.3, 0.5), (1.3, 0.8, 5.8, 5.4, 1.5, 1.0)):
-            yield (54 + (x + dx - 24) * SCALE, 54 + (y + dy - 24) * SCALE,
-                   w * SCALE, h * SCALE, r * SCALE, color, alpha)
+            yield (54 + (x + dx * unit - 50) * scale, 54 + (y + dy * unit - 50) * scale,
+                   w * unit * scale, h * unit * scale, r * unit * scale, color, alpha)
 
 
 def keys_svg():
@@ -67,8 +71,8 @@ def android():
     res = ROOT / "app/android/app/src/main/res"
     drawables = {
         "background": [path("M0,0h108v108h-108z", INK)],
-        "foreground": [path(rounded(x, y, w, h, r), c, a) for x, y, w, h, r, c, a in layers()],
-        "monochrome": [path(rounded(x, y, w, h, r), "#FFFFFF", a) for x, y, w, h, r, _, a in layers()],
+        "foreground": [path(rounded(x, y, w, h, r), c, a) for x, y, w, h, r, c, a in layers(SAFE)],
+        "monochrome": [path(rounded(x, y, w, h, r), "#FFFFFF", a) for x, y, w, h, r, _, a in layers(SAFE)],
     }
     for name, paths in drawables.items():
         (res / f"drawable/ic_launcher_{name}.xml").write_text(vector(paths))
